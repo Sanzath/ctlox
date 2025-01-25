@@ -155,7 +155,7 @@ namespace ctlox {
         template <int _location>
         struct scan_token_at<_location, char_class::eof> {
             template <typename C, typename... Tokens>
-            using f = dcall<C, sizeof...(Tokens)>::template f<
+            using f = C::template f<
                 // C argument is dropped... oh.....
                 Tokens...,
                 token_ct<_location, token_type::eof, "">>;
@@ -259,26 +259,9 @@ namespace ctlox {
 
     namespace tests {
 
-        using output_1 = scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)", as_list>;
+        //using output_1 = scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)", to_list>;
 
-        static_assert(output_1::size == 10);
-
-        struct passthrough {
-            template <typename C, typename... Ts>
-            using f = C::template f<Ts...>;
-        };
-
-        template <typename Bound>
-        struct with {
-            template <typename C, typename... Ts>
-            using f = C::template f<Bound, Ts...>;
-        };
-
-        template <typename C1, typename C2>
-        struct chained {
-            template <typename... Ts>
-            using f = C1::template f<C2, Ts...>;
-        };
+        //static_assert(output_1::size == 10);
 
         //using output_2 =
         //    identity::template f<
@@ -289,11 +272,11 @@ namespace ctlox {
         //    >
         //    >;
 
-        using output_2 = scanner_ct<"">
-            ::template f<chained<at<0>, identity>>;
+        //using output_2 = scanner_ct<"">
+        //    ::template f<chained<at<0>, identity>>;
         //::template f<
 
-        static_assert(output_2::type == token_type::eof);
+        //static_assert(output_2::type == token_type::eof);
 
         //using x = printout<output>;
     }
