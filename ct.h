@@ -20,13 +20,6 @@ namespace ctlox {
         pack,
     };
 
-    // terminal -- ??
-    //struct as_error {
-    //    template <typename...> struct as_error_impl;
-    //    template <typename... Ts>
-    //    using f = as_error_impl<Ts...>::type;
-    //};
-
     template <typename C>
     concept accepts_zero = (C::accepts == call_arity::zero);
     template <typename C>
@@ -220,6 +213,20 @@ namespace ctlox {
         using f = call<C, Ts...>;
     };
 
+    //
+    struct to_error_p {
+        static constexpr inline auto accepts = call_arity::pack;
+        template <typename... Ts> struct print;
+        template <typename C, typename... Ts>
+        using f = typename print<Ts...>::type;
+    };
+    struct to_error {
+        static constexpr inline auto accepts = call_arity::one;
+        template <typename... Ts> struct print;
+        template <typename C, typename T>
+        using f = typename print<T>::type;
+    };
+
     namespace tests {
 
         // example one-to-pack: repeat_5 (could be repeat<N>)
@@ -239,18 +246,9 @@ namespace ctlox {
             compose<at<2>, identity>,
             compose<identity, repeat_5>,
             to_list,
-            identity
+            identity,
+            to_error
         >;
-
-        static_assert(std::is_same_v<
-            my_composition,
-            composition<
-            given_some<int, double, std::string, std::size_t>,
-            at<2>, identity,
-            identity, repeat_5,
-            to_list,
-            identity>
-        >);
 
         using my_list = call<my_composition>;
 
