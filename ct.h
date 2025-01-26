@@ -101,7 +101,7 @@ namespace ctlox {
             template <typename... OFs>
             using f = decompose<Fs...>::template f<OFs..., F>;
         };
-        
+
         template <>
         struct decompose<> {
             template <typename... OFs>
@@ -204,6 +204,15 @@ namespace ctlox {
         using f = dcall<at_impl<0>, sizeof...(Ts)>::template f<C, Ts...>;
     };
 
+    // example zero-to-one: given
+    template <typename T>
+    struct given {
+        static constexpr inline auto accepts = call_arity::zero;
+
+        template <accepts_one C>
+        using f = call<C, T>;
+    };
+
     // example zero-to-pack: given_some
     template <typename... Ts>
     struct given_some {
@@ -213,13 +222,14 @@ namespace ctlox {
         using f = call<C, Ts...>;
     };
 
-    //
+    // for debugging: produce a compiler error with to_error[_p]'s input
     struct to_error_p {
         static constexpr inline auto accepts = call_arity::pack;
         template <typename... Ts> struct print;
         template <typename C, typename... Ts>
         using f = typename print<Ts...>::type;
     };
+
     struct to_error {
         static constexpr inline auto accepts = call_arity::one;
         template <typename... Ts> struct print;
@@ -246,8 +256,8 @@ namespace ctlox {
             compose<at<2>, identity>,
             compose<identity, repeat_5>,
             to_list,
-            identity,
-            to_error
+            identity
+            //to_error
         >;
 
         using my_list = call<my_composition>;
