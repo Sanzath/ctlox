@@ -196,7 +196,7 @@ namespace ctlox {
         template <int _location>
         struct scan_token_at<_location, char_class::eof> {
             template <typename C, typename... Tokens>
-            using f = call<
+            using f = calln<
                 C, Tokens...,
                 token_ct<_location, token_type::eof, "">>;
         };
@@ -300,51 +300,46 @@ namespace ctlox {
         };
 
     public:
-        static constexpr inline auto accepts = call_arity::zero;
+        using has_f0 = void;
 
         template <typename C>
-        using f = scan_token_at<0>::template f<C>;
+        using f0 = scan_token_at<0>::template f<C>;
     };
 
-    //namespace tests {
+    namespace tests {
 
-    //    using output_1 = call<compose<
-    //        scan_ct< R"("sup" >= (3 / 2) > "bye" // signing off)">,
-    //        to_list>>;
+        using output_1 = call<compose<
+            scan_ct< R"("sup" >= (3 / 2) > "bye" // signing off)">,
+            to_list,
+            returned>>;
 
-    //    static_assert(output_1::size == 10);
+        static_assert(output_1::size == 10);
 
-    //    using scanned = call<compose<
-    //        scan_ct<"var x = false nil true">,
-    //        to_list>>;
+        using scanned = call<scan_ct<"var x = false nil true">>;
 
-    //    //using scanned_2 = call<scan_ct<"var x">>;
+        template <std::size_t I>
+        using scanned_at = call<compose<scanned, at<I>, returned>>;
 
-    //    template <std::size_t I>
-    //    using scanned_at = call<compose<given<scanned>, from_list, at<I>>>;
+        static_assert(scanned_at<0>::type == token_type::_var);
+        static_assert(scanned_at<0>::lexeme == "var");
+        static_assert(std::convertible_to<decltype(scanned_at<0>::literal), none>);
+        //call<compose<given_pack<decltype(scanned_at<0>::literal), char>, to_error>>;
 
-    //    static_assert(scanned_at<0>::type == token_type::_var);
-    //    static_assert(scanned_at<0>::lexeme == "var");
-    //    static_assert(std::convertible_to<decltype(scanned_at<0>::literal), none>);
-    //    //call<to_error, decltype(scanned_at<0>::literal)>;
+        static_assert(scanned_at<1>::type == token_type::identifier);
+        static_assert(scanned_at<1>::lexeme == "x");
 
-    //    static_assert(scanned_at<1>::type == token_type::identifier);
-    //    static_assert(scanned_at<1>::lexeme == "x");
+        static_assert(scanned_at<3>::type == token_type::_false);
+        static_assert(scanned_at<3>::lexeme == "false");
+        static_assert(scanned_at<3>::literal == false);
 
-    //    static_assert(scanned_at<3>::type == token_type::_false);
-    //    static_assert(scanned_at<3>::lexeme == "false");
-    //    static_assert(scanned_at<3>::literal == false);
+        static_assert(scanned_at<4>::type == token_type::_nil);
+        static_assert(scanned_at<4>::lexeme == "nil");
+        static_assert(std::convertible_to<decltype(scanned_at<4>::literal), nil>);
 
-    //    static_assert(scanned_at<4>::type == token_type::_nil);
-    //    static_assert(scanned_at<4>::lexeme == "nil");
-    //    static_assert(std::convertible_to<decltype(scanned_at<4>::literal), nil>);
-
-    //    static_assert(scanned_at<5>::type == token_type::_true);
-    //    static_assert(scanned_at<5>::lexeme == "true");
-    //    static_assert(scanned_at<5>::literal == true);
-
-    //    //using x = printout<output>;
-    //}
+        static_assert(scanned_at<5>::type == token_type::_true);
+        static_assert(scanned_at<5>::lexeme == "true");
+        static_assert(scanned_at<5>::literal == true);
+    }
 
 
     //using x = printout<output>;
