@@ -1,6 +1,7 @@
 #pragma once
 
-#include <tuple>
+#include <concepts>
+#include <type_traits>
 
 namespace ctlox {
     // dcall: template magic that allows alias pack size "mismatches"
@@ -14,65 +15,114 @@ namespace ctlox {
     template <typename C, std::size_t N>
     using dcall = typename dependant_impl<(N < 100'000), C>::type;
 
+    // continuation traits
     template <typename C>
     struct cont_traits {
         static constexpr inline bool has_f0 = requires { typename C::has_f0; };
+
         static constexpr inline bool has_f1 = requires { typename C::has_f1; };
         static constexpr inline bool has_fn = requires { typename C::has_fn; };
+
+        static constexpr inline bool has_z1 = requires { typename C::has_z1; };
+        static constexpr inline bool has_zn = requires { typename C::has_zn; };
     };
 
+    // A continuation which can accept exactly 0 arguments through its f0 alias.
+    // Usually used to initiate a composition.
     template <typename C>
-    concept accepts_zero = cont_traits<C>::has_f0;
+    concept initiator = cont_traits<C>::has_f0;
 
+    // A continuation which accepts another continuation and exactly one argument through its f1 alias.
     template <typename C>
-    concept accepts_one = cont_traits<C>::has_f1;
+    concept continues_one = cont_traits<C>::has_f1;
 
+    // A continuation which accepts exactly one argument through its z1 alias, terminating a chain.
     template <typename C>
-    concept accepts_pack = cont_traits<C>::has_fn;
+    concept terminates_one = cont_traits<C>::has_z1;
+
+    // A continuation which is callable with call1.
+    template <typename C>
+    concept accepts_one = continues_one<C> || terminates_one<C>;
+
+    // A continuation which accepts another continuation and a pack of arguments through its fn alias.
+    template <typename C>
+    concept continues_pack = cont_traits<C>::has_fn;
+
+    // A continuation which accepts a pack of arguments through its zn alias, terminating a chain.
+    template <typename C>
+    concept terminates_pack = cont_traits<C>::has_zn;
+
+    // A continuation which is callable with calln.
+    template <typename C>
+    concept accepts_pack = continues_pack<C> || terminates_pack<C>;
 
     struct deferred;
 
     // calling continuations
-    template <accepts_zero C>
-    struct call0_impl {
+    template <initiator C>
+    struct initiate_impl {
         using f0 = C::template f0<deferred>;
     };
 
-    template <accepts_one C>
+    template <typename C>
     struct call1_impl {
+        static_assert(false, "C must model accepts_one");
+    };
+
+    template <continues_one C>
+    struct call1_impl<C> {
         template <typename T>
         using f1 = C::template f1<deferred, T>;
     };
 
-    template <accepts_pack C>
+    template <terminates_one C>
+    struct call1_impl<C> {
+        template <typename T>
+        using f1 = C::template z1<T>;
+    };
+
+    template <typename C>
     struct calln_impl {
+        static_assert(false, "C must model accepts_pack");
+    };
+
+    template <continues_pack C>
+    struct calln_impl<C> {
         template <typename... Ts>
         using fn = C::template fn<deferred, Ts...>;
     };
 
+    template <terminates_pack C>
+    struct calln_impl<C> {
+        template <typename... Ts>
+        using fn = C::template zn<Ts...>;
+    };
+
     // calls the next continuation of a specified "arity"
-    template <accepts_zero C>
-    using call0 = typename call0_impl<C>::f0;
+    template <initiator C>
+    using initiate = typename initiate_impl<C>::f0;
     template <accepts_one C, typename T>
     using call1 = typename call1_impl<C>::template f1<T>;
     template <accepts_pack C, typename... Ts>
     using calln = typename calln_impl<C>::template fn<Ts...>;
 
+
     // inferred call
     template <typename C, std::size_t N>
-    struct call_impl;
-
-    template <typename C>
-        requires(accepts_zero<C>&& accepts_pack<C>)
-    struct call_impl<C, 0>
-    {
-        static_assert(false, "Call with 0 arguments is ambiguous when C could accept either zero arguments or a pack. Use call0 or calln instead.");
+    struct call_impl {
+        static_assert(false, "Invalid continuation for the given number of arguments.");
     };
 
-    template <accepts_zero C>
+    template <typename C>
+        requires(initiator<C>&& accepts_pack<C>)
+    struct call_impl<C, 0> {
+        static_assert(false, "Call with 0 arguments is ambiguous when C could accept either zero arguments or a pack. Use initiate or calln instead.");
+    };
+
+    template <initiator C>
     struct call_impl<C, 0> {
         template <typename... Ts>
-        using f = call0<C>;
+        using f = initiate<C>;
     };
 
     template <accepts_pack C>
@@ -83,8 +133,7 @@ namespace ctlox {
 
     template <typename C>
         requires(accepts_one<C>&& accepts_pack<C>)
-    struct call_impl<C, 1>
-    {
+    struct call_impl<C, 1> {
         static_assert(false, "Call with 1 argument is ambiguous when C could accept either one argument or a pack. Use call1 or calln instead.");
     };
 
@@ -112,40 +161,34 @@ namespace ctlox {
     template <typename C, typename... Ts>
     using call = call_impl<C, sizeof...(Ts)>::template f<Ts...>;
 
-    // default terminal continuation: deferral, ignoring the input continuation,
-    // and allowing the returned type to be used as a 0-input start
-    // to a following composition
-    struct deferred {
+    // given_one: initiator which passes its template argument to the continuation.
+    template <typename T>
+    struct given_one {
         using has_f0 = void;
-        using has_f1 = void;
-        using has_fn = void;
 
-        struct capture_0 {
-            using has_f0 = void;
-            template <accepts_zero C>
-            using f0 = call0<C>;
-        };
+        template <accepts_one C>
+        using f0 = call1<C, T>;
+    };
+
+    // given_pack: initiator which passes its template arguments to the continuation.
+    template <typename... Ts>
+    struct given_pack {
+        using has_f0 = void;
+
+        template <accepts_pack C>
+        using f0 = calln<C, Ts...>;
+    };
+
+    // deferred: terminal which returns given_one or given_pack,
+    // which can be used to initiate another composition.
+    struct deferred {
+        using has_z1 = void;
+        using has_zn = void;
 
         template <typename T>
-        struct capture_1 {
-            using has_f0 = void;
-            template <accepts_one C>
-            using f0 = call1<C, T>;
-        };
-
+        using z1 = given_one<T>;
         template <typename... Ts>
-        struct capture_n {
-            using has_f0 = void;
-            template <accepts_pack C>
-            using f0 = calln<C, Ts...>;
-        };
-
-        template <typename C>
-        using f0 = capture_0;
-        template <typename C, typename T>
-        using f1 = capture_1<T>;
-        template <typename C, typename... Ts>
-        using fn = capture_n<Ts...>;
+        using zn = given_pack<Ts...>;
     };
 
     // composing continuations
@@ -193,36 +236,52 @@ namespace ctlox {
 
     public:
         template <typename... Fs>
-        using f = decompose<Fs...>::template f<>;
+        using f_full = decompose<Fs...>::template f<>;
+
+        template <typename... Fs>
+        using f_next = recompose<sizeof...(Fs) == 1>::template f<Fs...>;
     };
 
     template <typename... Fs>
-    using compose = compose_impl::template f<Fs...>;
+    using compose = compose_impl::template f_full<Fs...>;
+
+    template <typename... Fs>
+    using compose_next = compose_impl::template f_next<Fs...>;
+
+    template <initiator C, typename... Cs>
+    using run = initiate<compose<C, Cs...>>;
 
     // calling continuations with compositions
-    template <accepts_zero F, typename... Fs>
-    struct call0_impl<composition<F, Fs...>> {
-        using f0 = F::template f0<compose<Fs...>>;
+    template <initiator F, typename... Fs>
+    struct initiate_impl<composition<F, Fs...>> {
+        using f0 = F::template f0<compose_next<Fs...>>;
     };
-    template <accepts_one F, typename... Fs>
+    template <continues_one F, typename... Fs>
     struct call1_impl<composition<F, Fs...>> {
         template <typename T>
-        using f1 = F::template f1<compose<Fs...>, T>;
+        using f1 = F::template f1<compose_next<Fs...>, T>;
     };
-    template <accepts_pack F, typename... Fs>
+    template <terminates_one F, typename... Fs>
+    struct call1_impl<composition<F, Fs...>> {
+        template <typename T>
+        using f1 = F::template z1<T>;
+    };
+    template <continues_pack F, typename... Fs>
     struct calln_impl<composition<F, Fs...>> {
         template <typename... Ts>
-        using fn = F::template fn<compose<Fs...>, Ts...>;
+        using fn = F::template fn<compose_next<Fs...>, Ts...>;
+    };
+    template <terminates_pack F, typename... Fs>
+    struct calln_impl<composition<F, Fs...>> {
+        template <typename... Ts>
+        using fn = F::template zn<Ts...>;
     };
 
     // example any-to-same: noop
     struct noop {
-        using has_f0 = void;
         using has_f1 = void;
         using has_fn = void;
 
-        template <accepts_zero C>
-        using f0 = call0<C>;
         template <accepts_one C, typename T>
         using f1 = call1<C, T>;
         template <accepts_pack C, typename... Ts>
@@ -246,7 +305,7 @@ namespace ctlox {
     private:
         template <typename T>
         struct from_list_impl {
-            static_assert(false, "T is not a list<Ts...>");
+            static_assert(false, "T is not a list<Ts...>.");
         };
 
         template <typename... Ts>
@@ -291,59 +350,52 @@ namespace ctlox {
         using fn = dcall<at_impl<0>, sizeof...(Ts)>::template f<C, Ts...>;
     };
 
-    // example zero-to-one: given
-    template <typename T>
-    struct given {
-        using has_f0 = void;
+    // disambiguation: as_one and as_pack may be used as the first item
+    // in a composition to disambiguate the general call case where only
+    // one argument is passed in.
+    struct as_one {
+        using has_f1 = void;
 
-        template <accepts_one C>
-        using f0 = call1<C, T>;
+        template <accepts_one C, typename T>
+        using f1 = call1<C, T>;
     };
 
-    // example zero-to-pack: given_some
-    template <typename... Ts>
-    struct given_pack {
-        using has_f0 = void;
+    struct as_pack {
+        using has_fn = void;
 
-        template <accepts_pack C>
-        using f0 = calln<C, Ts...>;
+        template <accepts_pack C, typename... Ts>
+        using fn = calln<C, Ts...>;
     };
 
-    // for debugging: produce a compiler error with to_error's input
-    struct to_error {
+    // for debugging: produce a compiler error with errored's input
+    struct errored {
     private:
         template <typename... Ts> struct print;
 
     public:
-        using has_f1 = void;
-        using has_fn = void;
+        using has_z1 = void;
+        using has_zn = void;
 
-        template <typename C, typename T>
-        using f1 = typename print<T>::type;
-        template <typename C, typename... Ts>
-        using fn = typename print<Ts...>::type;
+        template <typename T>
+        using z1 = typename print<T>::type;
+        template <typename... Ts>
+        using zn = typename print<Ts...>::type;
     };
 
     struct returned {
-        using has_f1 = void;
-        template <typename C, typename T>
-        using f1 = T;
+        using has_z1 = void;
+        template <typename T>
+        using z1 = T;
     };
 
     namespace callztests {
-        using t0 = call0<deferred>;
-        using t1 = call1<deferred, int>;
+        using t1 = initiate<given_one<int>>;
         using tn0 = calln<deferred>;
         using tn1 = calln<deferred, int>;
         using tn2 = calln<deferred, char, short>;
     }
 
     namespace comptests {
-        struct zero_to_zero {
-            using has_f0 = void;
-            template <typename C>
-            using f0 = call0<C>;
-        };
         struct zero_to_one {
             using has_f0 = void;
             template <typename C>
@@ -353,11 +405,6 @@ namespace ctlox {
             using has_f0 = void;
             template <typename C>
             using f0 = calln<C, int, char>;
-        };
-        struct one_to_zero {
-            using has_f1 = void;
-            template <typename C, typename T>
-            using f1 = call0<C>;
         };
         struct one_to_one {
             using has_f1 = void;
@@ -369,11 +416,6 @@ namespace ctlox {
             template <typename C, typename T>
             using f1 = calln<C, T, T>;
         };
-        struct pack_to_zero {
-            using has_fn = void;
-            template <typename C, typename... Ts>
-            using fn = call0<C>;
-        };
         struct pack_to_one {
             using has_fn = void;
             template <typename C, typename... Ts>
@@ -384,13 +426,29 @@ namespace ctlox {
             template <typename C, typename... Ts>
             using fn = calln<C, Ts...>;
         };
+        struct one_terminal {
+            using has_z1 = void;
+            template <typename T>
+            using z1 = T;
+        };
+        struct pack_terminal {
+            using has_zn = void;
+            template <typename... Ts>
+            using zn = list<Ts...>;
+        };
 
-        using t1 = call0<compose<zero_to_one, one_to_pack, pack_to_zero, zero_to_zero, zero_to_pack, pack_to_pack, pack_to_one, one_to_one, one_to_one>>;
-        static_assert(std::same_as<t1, deferred::capture_1<int>>);
-        using t2 = call0<compose<t1, one_to_pack>>;
+        // terminated packs
+        using t0 = initiate<compose<zero_to_one, one_to_one, one_to_pack, pack_terminal>>;
+        static_assert(std::same_as<t0, list<int, int>>);
+        using t1 = initiate<compose<zero_to_pack, pack_to_pack, pack_to_one, one_terminal>>;
+        static_assert(std::same_as<t1, int>);
 
-        using t3 = calln<compose<pack_to_one>, int, char*>;
+        // unterminated packs: result can be used in another pack
+        using t2 = initiate<compose<zero_to_pack>>;
+        using t3 = initiate<compose<t2, pack_to_one, one_to_one>>;
+        using t4 = initiate<compose<t3, one_to_pack, pack_to_pack>>;
     }
+
     namespace calltests {
         using namespace comptests;
 
@@ -402,10 +460,10 @@ namespace ctlox {
         using t5 = call<pack_to_pack, int, char>;
 
         // the following fail (and that's intended):
-        // using t6 = call<zero_to_one, char>;
-        // using t7 = call<zero_to_pack, int, char>;
-        // using t8 = call<one_to_one>;
-        // using t9 = call<one_to_one, char, int>;
+        // using t6f = call<zero_to_one, char>;
+        // using t7f = call<zero_to_pack, int, char>;
+        // using t8f = call<one_to_one>;
+        // using t9f = call<one_to_one, char, int>;
     }
 
     namespace tests {
@@ -413,7 +471,7 @@ namespace ctlox {
         // example one-to-pack: repeat_5 (could be repeat<N>)
         struct repeat_5 {
             using has_f1 = void;
-               
+
             template <accepts_pack C, typename Arg>
             using f1 = calln<C, Arg, Arg, Arg, Arg, Arg>;
         };
@@ -428,12 +486,21 @@ namespace ctlox {
             compose<noop, repeat_5>,
             to_list,
             returned,
-            to_error
+            errored,
+            deferred
         >;
 
         using my_list = call<my_composition>;
 
         static_assert(std::is_same_v<my_list, list<std::string, std::string, std::string, std::string, std::string>>);
+
+        using my_comp_2 = compose<
+            as_one,
+            repeat_5,
+            at<3>,
+            returned>;
+
+        using my_t = call<my_comp_2, char>;
     }
 }
 

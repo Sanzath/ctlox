@@ -29,22 +29,22 @@ namespace ctlox {
         constexpr auto end() { return str_.end(); };
         constexpr auto end() const { return str_.end(); };
 
-        constexpr char operator[](int idx) const { return str_[idx]; };
+        constexpr char operator[](std::size_t idx) const { return str_[idx]; };
 
         constexpr operator std::string_view() const {
             return std::string_view(str_.begin(), str_.end());
         }
 
-        template <int first, int last>
+        template <std::size_t first, std::size_t last>
         constexpr string_ct<last - first> substr() const {
             string_ct<last - first> other;
             std::ranges::copy(str_.begin() + first, str_.begin() + last, other.begin());
             return other;
         }
 
-        constexpr int find_next(int start, char c) const {
+        constexpr std::size_t find_next(std::size_t start, char c) const {
             const auto iter = std::ranges::find(str_.begin() + start, str_.end(), c);
-            return static_cast<int>(iter == str_.end() ? str_.size() : iter - str_.begin());
+            return iter == str_.end() ? str_.size() : iter - str_.begin();
         }
 
         constexpr auto operator<=>(const string_ct&) const = default;

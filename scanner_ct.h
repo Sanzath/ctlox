@@ -9,10 +9,16 @@ namespace ctlox {
     struct none {};
     struct nil {};
 
-    template <int _location, string_ct _message>
-    struct error_ct {};
+    struct nil_t {};
+    static constexpr inline nil_t nil;
 
-    template <int _location, token_type _type, string_ct _lexeme, auto _literal = none{} >
+    template <std::size_t _location, string_ct _message>
+    struct error_ct {
+        static constexpr inline auto location = _location;
+        static constexpr inline auto message = _message;
+    };
+
+    template <std::size_t _location, token_type _type, string_ct _lexeme, auto _literal = none{} >
     struct token_ct {
         static constexpr inline auto location = _location;
         static constexpr inline auto type = _type;
@@ -147,29 +153,29 @@ namespace ctlox {
         template <token_type type>
         static constexpr inline auto keyword_literal = none{};
         template <>
-        static constexpr inline auto keyword_literal<token_type::_false> = false;
+        constexpr inline auto keyword_literal<token_type::_false> = false;
         template <>
-        static constexpr inline auto keyword_literal<token_type::_true> = true;
+        constexpr inline auto keyword_literal<token_type::_true> = true;
         template <>
-        static constexpr inline auto keyword_literal<token_type::_nil> = nil{};
+        constexpr inline auto keyword_literal<token_type::_nil> = nil;
     };
 
     template <string_ct s>
     struct scan_ct : private base_scanner_ct {
     private:
-        static constexpr inline bool at_end(int location) {
+        static constexpr inline bool at_end(std::size_t location) {
             return location >= s.size();
         }
 
-        static constexpr inline char at(int location) {
+        static constexpr inline char at(std::size_t location) {
             return at_end(location) ? '\0' : s[location];
         }
 
-        static constexpr inline char_class classify_at(int location) {
+        static constexpr inline char_class classify_at(std::size_t location) {
             return classify_char(at(location));
         }
 
-        static constexpr inline int find_end_of_number(int location) {
+        static constexpr inline std::size_t find_end_of_number(std::size_t location) {
             while (is_digit(at(location))) ++location;
             if (at(location) == '.' && is_digit(at(location + 1))) {
                 ++location;
@@ -179,12 +185,12 @@ namespace ctlox {
             return location;
         }
 
-        static constexpr inline int find_end_of_identifier(int location) {
+        static constexpr inline std::size_t find_end_of_identifier(std::size_t location) {
             while (is_alphanumeric(at(location))) ++location;
             return location;
         }
 
-        template <int _location, char_class _class = classify_at(_location)>
+        template <std::size_t _location, char_class _class = classify_at(_location)>
         struct scan_token_at {
             // catch-all: unknown character
             template <typename C, typename... Tokens>
@@ -193,7 +199,7 @@ namespace ctlox {
                 error_ct<_location, "Unexpected character.">>;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::eof> {
             template <typename C, typename... Tokens>
             using f = calln<
@@ -201,57 +207,57 @@ namespace ctlox {
                 token_ct<_location, token_type::eof, "">>;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::whitespace> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 1>::template f<C, Tokens...>;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::single> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 1>::template f<
                 C, Tokens...,
-                token_ct<_location, identify_single(_location), s.template substr<_location, _location + 1>()>
+                token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::single_maybe_equal> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 1>::template f<
                 C, Tokens...,
-                token_ct<_location, identify_single(_location), s.template substr<_location, _location + 1>()>
+                token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
             requires(at(_location + 1) == '=')
         struct scan_token_at<_location, char_class::single_maybe_equal> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 2>::template f<
                 C, Tokens...,
-                token_ct<_location, identify_single_equal(_location), s.template substr<_location, _location + 2>()>
+                token_ct<_location, identify_single_equal(at(_location)), s.template substr<_location, _location + 2>()>
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::slash_or_comment> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 1>::template f<
                 C, Tokens...,
-                token_ct<_location, identify_single(_location), s.template substr<_location, _location + 1>()>
+                token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
             requires(at(_location + 1) == '/')
         struct scan_token_at<_location, char_class::slash_or_comment> {
             template <typename C, typename... Tokens>
             using f = scan_token_at<s.find_next(_location, '\n')>::template f<C, Tokens...>;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::string> {
             static constexpr inline auto end = s.find_next(_location + 1, '"') + 1;
             static constexpr inline auto lexeme = s.template substr<_location, end>();
@@ -264,7 +270,7 @@ namespace ctlox {
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
             requires(at_end(s.find_next(_location + 1, '"')))
         struct scan_token_at<_location, char_class::string> {
             template <typename C, typename... Tokens>
@@ -274,7 +280,7 @@ namespace ctlox {
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::number> {
             static constexpr inline auto end = find_end_of_number(_location);
             static constexpr inline auto lexeme = s.template substr<_location, end>();
@@ -286,7 +292,7 @@ namespace ctlox {
             >;
         };
 
-        template <int _location>
+        template <std::size_t _location>
         struct scan_token_at<_location, char_class::identifier> {
             static constexpr inline auto end = find_end_of_identifier(_location);
             static constexpr inline auto lexeme = s.template substr<_location, end>();
@@ -307,40 +313,30 @@ namespace ctlox {
     };
 
     namespace tests {
-
-        using output_1 = call<compose<
-            scan_ct< R"("sup" >= (3 / 2) > "bye" // signing off)">,
+        using tokens_1 = run<
+            scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)">,
             to_list,
-            returned>>;
+            returned>;
 
-        static_assert(output_1::size == 10);
+        static_assert(tokens_1::size == 10);
 
-        using scanned = call<scan_ct<"var x = false nil true">>;
+        using tokens_2 = run<
+            scan_ct<"var x = false nil true">,
+            to_list,
+            returned>;
 
-        template <std::size_t I>
-        using scanned_at = call<compose<scanned, at<I>, returned>>;
+        using expected_tokens_2 = run<
+            given_pack<
+            token_ct<0, token_type::_var, "var">,
+            token_ct<4, token_type::identifier, "x">,
+            token_ct<6, token_type::equal, "=">,
+            token_ct<8, token_type::_false, "false", false>,
+            token_ct<14, token_type::_nil, "nil", nil>,
+            token_ct<18, token_type::_true, "true", true>,
+            token_ct<22, token_type::eof, "">>,
+            to_list,
+            returned>;
 
-        static_assert(scanned_at<0>::type == token_type::_var);
-        static_assert(scanned_at<0>::lexeme == "var");
-        static_assert(std::convertible_to<decltype(scanned_at<0>::literal), none>);
-        //call<compose<given_pack<decltype(scanned_at<0>::literal), char>, to_error>>;
-
-        static_assert(scanned_at<1>::type == token_type::identifier);
-        static_assert(scanned_at<1>::lexeme == "x");
-
-        static_assert(scanned_at<3>::type == token_type::_false);
-        static_assert(scanned_at<3>::lexeme == "false");
-        static_assert(scanned_at<3>::literal == false);
-
-        static_assert(scanned_at<4>::type == token_type::_nil);
-        static_assert(scanned_at<4>::lexeme == "nil");
-        static_assert(std::convertible_to<decltype(scanned_at<4>::literal), nil>);
-
-        static_assert(scanned_at<5>::type == token_type::_true);
-        static_assert(scanned_at<5>::lexeme == "true");
-        static_assert(scanned_at<5>::literal == true);
+        static_assert(std::same_as<tokens_2, expected_tokens_2>);
     }
-
-
-    //using x = printout<output>;
 };

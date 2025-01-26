@@ -44,5 +44,8 @@
     <ClInclude Include="ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="parser_ct.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

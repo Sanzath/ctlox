@@ -9,6 +9,7 @@
 
 #include "scanner.h"
 #include "scanner_ct.h"
+#include "parser_ct.h"
 
 namespace ctlox {
     template <std::size_t N>
@@ -78,7 +79,7 @@ namespace ctlox {
         std::string err_;
     };
 
-    constexpr program_output run(std::string_view s) {
+    constexpr program_output run_rt(std::string_view s) {
         scanner scanner(s);
         const auto scan_output = scanner.scan_tokens();
 
@@ -109,7 +110,7 @@ namespace ctlox {
     template <string_literal s>
     struct run_ct_impl {
         static constexpr inline program_output_sizes sizes = [] {
-            auto output = run(s);
+            auto output = run_rt(s);
             return program_output_sizes{
                 .out_size_ = output.out_.size(),
                 .err_size_ = output.err_.size(),
@@ -119,7 +120,7 @@ namespace ctlox {
         using program_output_type = program_output_ct<sizes>;
 
         static constexpr inline program_output_type program_output = [] {
-            auto output = run(s);
+            auto output = run_rt(s);
             return program_output_type{
                 .out_ = std::string_view(output.out_),
                 .err_ = std::string_view(output.err_),
