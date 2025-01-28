@@ -20,16 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="token.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="numbers.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="error.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="scanner.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="scanner_ct.h">
@@ -45,6 +36,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="parser_ct.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="token_ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

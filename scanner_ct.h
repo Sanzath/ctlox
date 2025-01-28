@@ -2,29 +2,11 @@
 
 #include "token_type.h"
 #include "string_ct.h"
+#include "token_ct.h"
 #include "numbers.h"
 #include "ct.h"
 
 namespace ctlox {
-    struct none {};
-    struct nil {};
-
-    struct nil_t {};
-    static constexpr inline nil_t nil;
-
-    template <std::size_t _location, string_ct _message>
-    struct error_ct {
-        static constexpr inline auto location = _location;
-        static constexpr inline auto message = _message;
-    };
-
-    template <std::size_t _location, token_type _type, string_ct _lexeme, auto _literal = none{} >
-    struct token_ct {
-        static constexpr inline auto location = _location;
-        static constexpr inline auto type = _type;
-        static constexpr inline auto lexeme = _lexeme;
-        static constexpr inline auto literal = _literal;
-    };
 
     struct base_scanner_ct {
     protected:
@@ -150,6 +132,15 @@ namespace ctlox {
             return token_type::identifier;
         }
 
+        // error "strings" (will be displayed more or less properly with errored
+        template <std::size_t _location>
+        struct _at_location_ {
+            template <char c>
+            struct _unexpected_character_ {};
+
+            struct _unterminated_string_ {};
+        };
+
         template <token_type type>
         static constexpr inline auto keyword_literal = none{};
         template <>
@@ -196,7 +187,8 @@ namespace ctlox {
             template <typename C, typename... Tokens>
             using f = scan_token_at<_location + 1>::template f<
                 C, Tokens...,
-                error_ct<_location, "Unexpected character.">>;
+                error_t<typename _at_location_<_location>::template _unexpected_character_<at(_location)>>
+            >;
         };
 
         template <std::size_t _location>
@@ -276,7 +268,7 @@ namespace ctlox {
             template <typename C, typename... Tokens>
             using f = scan_token_at<s.find_next(_location + 1, '"') + 1>::template f<
                 C, Tokens...,
-                error_ct<_location, "Unterminated string">
+                error_t<typename _at_location_<_location>::_unterminated_string_>
             >;
         };
 
@@ -315,27 +307,23 @@ namespace ctlox {
     namespace tests {
         using tokens_1 = run<
             scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)">,
-            to_list,
-            returned>;
+            listed>;
 
         static_assert(tokens_1::size == 10);
 
         using tokens_2 = run<
             scan_ct<"var x = false nil true">,
-            to_list,
-            returned>;
+            listed>;
 
-        using expected_tokens_2 = run<
-            given_pack<
+        using expected_tokens_2 = list<
             token_ct<0, token_type::_var, "var">,
             token_ct<4, token_type::identifier, "x">,
             token_ct<6, token_type::equal, "=">,
             token_ct<8, token_type::_false, "false", false>,
             token_ct<14, token_type::_nil, "nil", nil>,
             token_ct<18, token_type::_true, "true", true>,
-            token_ct<22, token_type::eof, "">>,
-            to_list,
-            returned>;
+            token_ct<22, token_type::eof, "">
+        >;
 
         static_assert(std::same_as<tokens_2, expected_tokens_2>);
     }

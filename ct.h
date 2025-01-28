@@ -367,6 +367,10 @@ namespace ctlox {
         using fn = calln<C, Ts...>;
     };
 
+    // common template type for errors (I suppose?)
+    template <typename T>
+    struct error_t {};
+
     // for debugging: produce a compiler error with errored's input
     struct errored {
     private:
@@ -386,6 +390,12 @@ namespace ctlox {
         using has_z1 = void;
         template <typename T>
         using z1 = T;
+    };
+
+    struct listed {
+        using has_zn = void;
+        template <typename... Ts>
+        using zn = list<Ts...>;
     };
 
     namespace callztests {
@@ -484,15 +494,15 @@ namespace ctlox {
             given_pack<int, double, std::string, std::size_t>,
             compose<at<2>, noop>,
             compose<noop, repeat_5>,
-            to_list,
-            returned,
-            errored,
-            deferred
+            listed,
         >;
 
         using my_list = call<my_composition>;
 
-        static_assert(std::is_same_v<my_list, list<std::string, std::string, std::string, std::string, std::string>>);
+        static_assert(std::is_same_v<
+            my_list, 
+            list<std::string, std::string, std::string, std::string, std::string>
+        >);
 
         using my_comp_2 = compose<
             as_one,

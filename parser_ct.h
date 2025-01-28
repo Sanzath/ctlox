@@ -11,4 +11,8 @@ namespace ctlox {
         template <accepts_one C, typename... Tokens>
         using fn = call1<C, void>;
     };
+
+    namespace parse_tests {
+
+    }
 }
