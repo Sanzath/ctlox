@@ -4,7 +4,13 @@
 #include "string_ct.h"
 
 namespace ctlox {
-    struct none_t {};
+    struct none_t {
+        constexpr bool operator==(const none_t&) const noexcept { return true; }
+
+        template <typename T>
+        constexpr bool operator==(const T&) const noexcept { return false; }
+    };
+
     static constexpr inline none_t none;
 
     struct nil_t {};

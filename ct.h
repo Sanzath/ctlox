@@ -193,7 +193,7 @@ namespace ctlox {
 
     // composing continuations
     template <typename... Fs>
-    struct composition;
+    struct composition {};
 
     template <typename F, typename... Fs>
     struct cont_traits<composition<F, Fs...>> : cont_traits<F> {};
@@ -494,8 +494,7 @@ namespace ctlox {
             given_pack<int, double, std::string, std::size_t>,
             compose<at<2>, noop>,
             compose<noop, repeat_5>,
-            listed,
-        >;
+            listed>;
 
         using my_list = call<my_composition>;
 
