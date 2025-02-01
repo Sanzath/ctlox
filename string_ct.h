@@ -55,4 +55,7 @@ namespace ctlox {
 
     template <std::size_t N>
     string_ct(const char(&str)[N]) -> string_ct<N - 1>;
+
+    template <string_ct s>
+    constexpr auto operator ""_ct() { return s; }
 }

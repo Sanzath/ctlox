@@ -8,7 +8,6 @@ namespace ctlox {
     constexpr double parse_double(std::string_view text) {
         auto dot = text.find('.');
         auto decimal_part = text.substr(0, dot);
-        auto fractional_part = text.substr(dot + 1);
 
         double value = 0.0;
         for (char c : decimal_part) {
@@ -16,11 +15,14 @@ namespace ctlox {
             value = (value * 10) + i;
         }
 
-        double divisor = 10;
-        for (char c : fractional_part) {
-            int i = c - '0';
-            value = value + i / divisor;
-            divisor *= 10;
+        if (dot != std::string_view::npos) {
+            auto fractional_part = text.substr(dot + 1);
+            double divisor = 10;
+            for (char c : fractional_part) {
+                int i = c - '0';
+                value = value + i / divisor;
+                divisor *= 10;
+            }
         }
 
         return value;

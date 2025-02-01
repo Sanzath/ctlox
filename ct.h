@@ -193,7 +193,7 @@ namespace ctlox {
 
     // composing continuations
     template <typename... Fs>
-    struct composition {};
+    struct composition final {};
 
     template <typename F, typename... Fs>
     struct cont_traits<composition<F, Fs...>> : cont_traits<F> {};
