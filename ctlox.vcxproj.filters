@@ -29,16 +29,16 @@
     <ClInclude Include="string_ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="token_type.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="parser_ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="token_ct.h">
+    <ClInclude Include="types.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="interpreter_ct.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

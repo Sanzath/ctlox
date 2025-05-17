@@ -134,12 +134,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ct.h" />
+    <ClInclude Include="interpreter_ct.h" />
     <ClInclude Include="parser_ct.h" />
     <ClInclude Include="scanner_ct.h" />
     <ClInclude Include="string_ct.h" />
     <ClInclude Include="numbers.h" />
-    <ClInclude Include="token_ct.h" />
-    <ClInclude Include="token_type.h" />
+    <ClInclude Include="types.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

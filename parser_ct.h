@@ -2,19 +2,9 @@
 
 #include "ct.h"
 
+#include "types.h"
+
 namespace ctlox {
-template <auto _literal>
-struct literal_expr { };
-
-template <typename Operator, typename Right>
-struct unary_expr { };
-
-template <typename Left, typename Operator, typename Right>
-struct binary_expr { };
-
-template <typename Expr>
-struct grouping_expr { };
-
 struct parse_ct {
 private:
     // struct expression
@@ -237,8 +227,11 @@ public:
     template <accepts_pack C, typename... Tokens>
     using fn = calln<compose<consume_expression, C>, Tokens...>;
 };
+}
 
-namespace parse_tests {
+#include "scanner_ct.h"
+
+namespace ctlox::parse_tests {
     static_assert(none == none);
     static_assert(none != 154.0);
 
@@ -365,5 +358,4 @@ namespace parse_tests {
                     literal_expr<2.0>>>,
             token_ct<9, token_type::star, "*">,
             literal_expr<3.5>>>);
-}
 }
