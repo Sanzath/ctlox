@@ -68,8 +68,10 @@ struct string_ct {
 template <std::size_t N>
 string_ct(const char (&str)[N]) -> string_ct<N - 1>;
 
-template <string_ct s>
-constexpr auto operator""_ct() { return s; }
+inline namespace literals {
+    template <string_ct s>
+    constexpr auto operator""_ct() { return s; }
+}
 
 template <std::size_t... Ns>
 constexpr auto concat(string_ct<Ns> const&... strings)

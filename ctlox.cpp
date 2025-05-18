@@ -80,7 +80,12 @@ using lox = compose<
 int main()
 {
     using output = ctlox::run<
-        ctlox::lox<"-2 + 2 == 0;">,
+        ctlox::lox<R"(
+            print -2 + 2 == 0;
+            print "bar";
+            print 100 * 200;)">,
         ctlox::returned>;
-    static_assert(output::values == std::tuple(true));
+
+    using namespace ctlox::literals;
+    static_assert(output::values == std::tuple(true, "bar"_ct, 100.0 * 200.0));
 }

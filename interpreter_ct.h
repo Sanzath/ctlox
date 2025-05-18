@@ -7,17 +7,21 @@ struct interpreter {
     template <typename... Statements>
     constexpr auto interpret(Statements... statements)
     {
-        return std::tuple(this->execute(statements)...);
+        return std::tuple_cat(this->execute(statements)...);
     }
 
     template <typename Expr>
-    constexpr auto execute(expression_stmt<Expr>)
+    constexpr std::tuple<> execute(expression_stmt<Expr>)
     {
-        // TODO: return monostate
-        return this->evaluate(Expr {});
+        this->evaluate(Expr {});
+        return {};
     }
 
-    // TODO: execute(print_stmt<Expr>)
+    template <typename Expr>
+    constexpr auto execute(print_stmt<Expr>)
+    {
+        return std::tuple(this->evaluate(Expr {}));
+    }
 
     template <auto _literal>
     constexpr auto evaluate(literal_expr<_literal>)
@@ -186,12 +190,12 @@ constexpr bool test()
 
 static_assert(concat("hello"_ct, ", "_ct, "world!"_ct) == "hello, world!"_ct);
 
-constexpr bool r0 = test<"1;", 1.0>();
-constexpr bool r1 = test<"-5;", -5.0>();
-constexpr bool r2 = test<R"(!!!!"hello";)", true>();
-constexpr bool r3 = test<R"((nil);)", nil>();
-constexpr bool r4 = test<R"(4 <= 4;)", true>();
-constexpr bool r5 = test<R"(4 < 3;)", false>();
-constexpr bool r6 = test<"5 * 100 / 22;", 5.0 * 100.0 / 22.0>();
-constexpr bool r7 = test<"5 * (100 / 22);", 5.0 * (100.0 / 22.0)>();
+constexpr bool r0 = test<"print 1;", 1.0>();
+constexpr bool r1 = test<"print -5;", -5.0>();
+constexpr bool r2 = test<R"(print !!!!"hello";)", true>();
+constexpr bool r3 = test<R"(print (nil);)", nil>();
+constexpr bool r4 = test<R"(print 4 <= 4;)", true>();
+constexpr bool r5 = test<R"(print 4 < 3;)", false>();
+constexpr bool r6 = test<"print 5 * 100 / 22;", 5.0 * 100.0 / 22.0>();
+constexpr bool r7 = test<"print 5 * (100 / 22);", 5.0 * (100.0 / 22.0)>();
 }
