@@ -74,6 +74,12 @@ struct token_ct {
     static constexpr inline auto literal = _literal;
 };
 
+template <typename Expr>
+struct expression_stmt { };
+
+template <typename Expr>
+struct print_stmt { };
+
 template <auto _literal>
 struct literal_expr { };
 
@@ -92,7 +98,7 @@ struct value_t {
     static constexpr inline value_type value = _value;
 
     constexpr value_type operator()() const noexcept { return value; }
-    constexpr explicit(false) operator value_type() const noexcept { return value; }  // NOLINT(google-explicit-constructor)
+    constexpr explicit(false) operator value_type() const noexcept { return value; } // NOLINT(google-explicit-constructor)
 };
 
 }

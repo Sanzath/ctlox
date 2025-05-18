@@ -7,19 +7,13 @@
 namespace ctlox {
 struct parse_ct {
 private:
-    // struct expression
-    // struct equality
-    // struct comparison
-    // struct term
-    // struct factor
-    // struct unary
-
     struct consume_right_paren {
         template <typename... Ts>
         struct impl {
-            // is there a way to error out without a hard error?
+            // TODO: is there a way to error out without a hard error?
             // With tokens, we could just intersperse the errors in the tokens.
             // But that doesn't really work here.
+            // -- Actually, by now parsing full statements, something could be done.
             static_assert(false, "Expect ')' after expression.");
         };
 
@@ -214,91 +208,143 @@ private:
 
     using consume_equality = compose<consume_comparison, maybe_match_equality_op>;
 
-    // TODO: eliminate leftover non-expressions?
-    // TODO: synchronize? Not sure if that's feasible or even desirable here.
     using consume_expression = consume_equality;
 
     struct consume_expression_workaround {
         using type = consume_expression;
     };
 
+    struct consume_semicolon {
+        template <typename... Ts>
+        struct impl {
+            static_assert(false, "Expect ';' after value.");
+        };
+
+        template <typename E, typename T, typename... Ts>
+            requires(T::type == token_type::semicolon)
+        struct impl<E, T, Ts...> {
+            template <typename C>
+            using f = calln<C, expression_stmt<E>, Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename... Ts>
+        using fn = impl<Ts...>::template f<C>;
+    };
+
+    struct consume_eof {
+        template <typename... Ts>
+        struct impl {
+            static_assert(false, "Expect EOF after program.");
+        };
+
+        template <typename S, typename T>
+            requires(T::type == token_type::eof)
+        struct impl<S, T> {
+            template <typename C>
+            using f = calln<C, S>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename... Ts>
+        using fn = impl<Ts...>::template f<C>;
+    };
+
+    using consume_expression_statement = compose<consume_expression, consume_semicolon, consume_eof>;
+
+    // struct consume_statements {
+    //     template <typename... Tokens>
+    //     struct impl {
+    //     };
+    //
+    //     using has_fn = void;
+    //     template <accepts_pack C, typename... Tokens>
+    //     using fn = impl<Tokens...>::template f<C>;
+    // };
+
 public:
     using has_fn = void;
     template <accepts_pack C, typename... Tokens>
-    using fn = calln<compose<consume_expression, C>, Tokens...>;
+    using fn = calln<compose<consume_expression_statement, C>, Tokens...>;
 };
 }
 
 #include "scanner_ct.h"
 
 namespace ctlox::parse_tests {
-    static_assert(none == none);
-    static_assert(none != 154.0);
+static_assert(none == none);
+static_assert(none != 154.0);
 
-    template <string_ct s, typename Expr>
-    constexpr inline bool test = std::same_as<
-        Expr,
-        run<scan_ct<s>, parse_ct, at<0>, returned>>;
-    template <string_ct s>
-    using debugtest = run<scan_ct<s>, parse_ct, at<0>, errored>;
+template <string_ct s, typename Expr>
+constexpr inline bool test = std::same_as<
+    Expr,
+    run<scan_ct<s>, parse_ct, at<0>, returned>>;
+template <string_ct s>
+using debugtest = run<scan_ct<s>, parse_ct, at<0>, errored>;
 
-    using t0 = run<
-        given_pack<
-            token_ct<0, token_type::number, "23.52", 123.52>>,
-        parse_ct,
-        at<0>,
-        returned>;
-    static_assert(std::same_as<t0, literal_expr<123.52>>);
+using t0 = run<
+    given_pack<
+        token_ct<0, token_type::number, "23.52", 123.52>,
+        token_ct<5, token_type::semicolon, ";">,
+        token_ct<6, token_type::eof, "">>,
+    parse_ct,
+    at<0>,
+    returned>;
+static_assert(std::same_as<t0, expression_stmt<literal_expr<123.52>>>);
 
-    using t1 = run<
-        scan_ct<"(123.52)">,
-        parse_ct,
-        at<0>,
-        returned>;
-    static_assert(std::same_as<t1, grouping_expr<literal_expr<123.52>>>);
+using t1 = run<
+    scan_ct<"(123.52);">,
+    parse_ct,
+    at<0>,
+    returned>;
+static_assert(std::same_as<t1, expression_stmt<grouping_expr<literal_expr<123.52>>>>);
 
-    static_assert(test<
-        "!123.52",
-        unary_expr<token_ct<0, token_type::bang, "!">, literal_expr<123.52>>>);
-    static_assert(test<
-        "-false",
-        unary_expr<token_ct<0, token_type::minus, "-">, literal_expr<false>>>);
-    static_assert(test<
-        "!!true",
-        unary_expr<token_ct<0, token_type::bang, "!">,
-            unary_expr<token_ct<1, token_type::bang, "!">, literal_expr<true>>>>);
-    static_assert(test<
-        "2 * 3",
+static_assert(test<
+    "!123.52;",
+    expression_stmt<unary_expr<token_ct<0, token_type::bang, "!">, literal_expr<123.52>>>>);
+static_assert(test<
+    "-false;",
+    expression_stmt<unary_expr<token_ct<0, token_type::minus, "-">, literal_expr<false>>>>);
+static_assert(test<
+    "!!true;",
+    expression_stmt<unary_expr<token_ct<0, token_type::bang, "!">, unary_expr<token_ct<1, token_type::bang, "!">, literal_expr<true>>>>>);
+static_assert(test<
+    "2 * 3;",
+    expression_stmt<
         binary_expr<
             literal_expr<2.0>,
             token_ct<2, token_type::star, "*">,
-            literal_expr<3.0>>>);
-    static_assert(test<
-        "1 * -2 / !false",
+            literal_expr<3.0>>>>);
+static_assert(test<
+    "1 * -2 / !false;",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 literal_expr<1.0>,
                 token_ct<2, token_type::star, "*">,
                 unary_expr<token_ct<4, token_type::minus, "-">, literal_expr<2.0>>>,
             token_ct<7, token_type::slash, "/">,
-            unary_expr<token_ct<9, token_type::bang, "!">, literal_expr<false>>>>);
-    static_assert(test<
-        R"(13.3 + "stuff")",
+            unary_expr<token_ct<9, token_type::bang, "!">, literal_expr<false>>>>>);
+static_assert(test<
+    R"(13.3 + "stuff";)",
+    expression_stmt<
         binary_expr<
             literal_expr<13.3>,
             token_ct<5, token_type::plus, "+">,
-            literal_expr<"stuff"_ct>>>);
-    static_assert(test<
-        R"(nil - nil - nil)",
+            literal_expr<"stuff"_ct>>>>);
+static_assert(test<
+    R"(nil - nil - nil;)",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 literal_expr<nil>,
                 token_ct<4, token_type::minus, "-">,
                 literal_expr<nil>>,
             token_ct<10, token_type::minus, "-">,
-            literal_expr<nil>>>);
-    static_assert(test<
-        "1 + 2 * 3 - 4",
+            literal_expr<nil>>>>);
+static_assert(test<
+    "1 + 2 * 3 - 4;",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 literal_expr<1.0>,
@@ -308,8 +354,9 @@ namespace ctlox::parse_tests {
                     token_ct<6, token_type::star, "*">,
                     literal_expr<3.0>>>,
             token_ct<10, token_type::minus, "-">,
-            literal_expr<4.0>>>);
-    static_assert(test<"1 * 2 + 3 / 4",
+            literal_expr<4.0>>>>);
+static_assert(test<"1 * 2 + 3 / 4;",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 literal_expr<1.0>,
@@ -319,10 +366,12 @@ namespace ctlox::parse_tests {
             binary_expr<
                 literal_expr<3.0>,
                 token_ct<10, token_type::slash, "/">,
-                literal_expr<4.0>>>>);
-    static_assert(test<"true > nil",
-        binary_expr<literal_expr<true>, token_ct<5, token_type::greater, ">">, literal_expr<nil>>>);
-    static_assert(test<"1 > 2 <= 3 >= 0",
+                literal_expr<4.0>>>>>);
+static_assert(test<"true > nil;",
+    expression_stmt<
+        binary_expr<literal_expr<true>, token_ct<5, token_type::greater, ">">, literal_expr<nil>>>>);
+static_assert(test<"1 > 2 <= 3 >= 0;",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 binary_expr<
@@ -332,24 +381,27 @@ namespace ctlox::parse_tests {
                 token_ct<6, token_type::less_equal, "<=">,
                 literal_expr<3.0>>,
             token_ct<11, token_type::greater_equal, ">=">,
-            literal_expr<0.0>>>);
-    static_assert(test<"nil != nil == false",
+            literal_expr<0.0>>>>);
+static_assert(test<"nil != nil == false;",
+    expression_stmt<
         binary_expr<
             binary_expr<
                 literal_expr<nil>,
                 token_ct<4, token_type::bang_equal, "!=">,
                 literal_expr<nil>>,
             token_ct<11, token_type::equal_equal, "==">,
-            literal_expr<false>>>);
-    static_assert(test<"7 == 2 * 3.5",
+            literal_expr<false>>>>);
+static_assert(test<"7 == 2 * 3.5;",
+    expression_stmt<
         binary_expr<
             literal_expr<7.0>,
             token_ct<2, token_type::equal_equal, "==">,
             binary_expr<
                 literal_expr<2.0>,
                 token_ct<7, token_type::star, "*">,
-                literal_expr<3.5>>>>);
-    static_assert(test<"(7 == 2) * 3.5",
+                literal_expr<3.5>>>>>);
+static_assert(test<"(7 == 2) * 3.5;",
+    expression_stmt<
         binary_expr<
             grouping_expr<
                 binary_expr<
@@ -357,5 +409,5 @@ namespace ctlox::parse_tests {
                     token_ct<3, token_type::equal_equal, "==">,
                     literal_expr<2.0>>>,
             token_ct<9, token_type::star, "*">,
-            literal_expr<3.5>>>);
+            literal_expr<3.5>>>>);
 }

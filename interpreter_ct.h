@@ -4,11 +4,20 @@
 
 namespace ctlox {
 struct interpreter {
-    template <typename Expr>
-    constexpr auto interpret(Expr expr)
+    template <typename... Statements>
+    constexpr auto interpret(Statements... statements)
     {
-        return this->evaluate(expr);
+        return std::tuple(this->execute(statements)...);
     }
+
+    template <typename Expr>
+    constexpr auto execute(expression_stmt<Expr>)
+    {
+        // TODO: return monostate
+        return this->evaluate(Expr {});
+    }
+
+    // TODO: execute(print_stmt<Expr>)
 
     template <auto _literal>
     constexpr auto evaluate(literal_expr<_literal>)
@@ -140,10 +149,15 @@ private:
 };
 
 struct interpret_ct {
-    using has_f1 = void;
+    template <typename... Statements>
+    struct program_output {
+        static constexpr inline auto values = interpreter {}.interpret(Statements {}...);
+    };
 
-    template <accepts_one C, typename Expr>
-    using f1 = call1<C, value_t<interpreter{}.interpret(Expr{})>>;
+    using has_fn = void;
+
+    template <accepts_one C, typename... Statements>
+    using fn = call1<C, program_output<Statements...>>;
 };
 }
 
@@ -151,18 +165,15 @@ struct interpret_ct {
 #include "scanner_ct.h"
 
 namespace ctlox::interpreter_tests {
-template <auto _value>
-struct value_t { };
-
 template <string_ct s, auto _expected>
 constexpr bool test()
 {
-    using expr = run<
+    using program_output = run<
         scan_ct<s>,
         parse_ct,
-        at<0>,
+        interpret_ct,
         returned>;
-    constexpr auto actual = interpreter().interpret(expr {});
+    constexpr auto actual = std::get<0>(program_output::values);
     if constexpr (_expected == actual) {
         return true;
     } else {
@@ -175,12 +186,12 @@ constexpr bool test()
 
 static_assert(concat("hello"_ct, ", "_ct, "world!"_ct) == "hello, world!"_ct);
 
-constexpr bool r0 = test<"1", 1.0>();
-constexpr bool r1 = test<"-5", -5.0>();
-constexpr bool r2 = test<R"(!!!!"hello")", true>();
-constexpr bool r3 = test<R"((nil))", nil>();
-constexpr bool r4 = test<R"(4 <= 4)", true>();
-constexpr bool r5 = test<R"(4 < 3)", false>();
-constexpr bool r6 = test<"5 * 100 / 22", 5.0 * 100.0 / 22.0>();
-constexpr bool r7 = test<"5 * (100 / 22)", 5.0 * (100.0 / 22.0)>();
+constexpr bool r0 = test<"1;", 1.0>();
+constexpr bool r1 = test<"-5;", -5.0>();
+constexpr bool r2 = test<R"(!!!!"hello";)", true>();
+constexpr bool r3 = test<R"((nil);)", nil>();
+constexpr bool r4 = test<R"(4 <= 4;)", true>();
+constexpr bool r5 = test<R"(4 < 3;)", false>();
+constexpr bool r6 = test<"5 * 100 / 22;", 5.0 * 100.0 / 22.0>();
+constexpr bool r7 = test<"5 * (100 / 22);", 5.0 * (100.0 / 22.0)>();
 }

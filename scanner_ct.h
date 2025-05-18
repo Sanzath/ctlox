@@ -171,13 +171,13 @@ protected:
     };
 
     template <token_type type>
-    static constexpr inline auto keyword_literal = none {};
+    static constexpr inline auto keyword_literal = none;
     template <>
-    constexpr inline auto keyword_literal<token_type::_false> = false;
+    constexpr auto keyword_literal<token_type::_false> = false;
     template <>
-    constexpr inline auto keyword_literal<token_type::_true> = true;
+    constexpr auto keyword_literal<token_type::_true> = true;
     template <>
-    constexpr inline auto keyword_literal<token_type::_nil> = nil;
+    constexpr auto keyword_literal<token_type::_nil> = nil;
 };
 
 template <string_ct s>

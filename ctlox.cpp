@@ -74,14 +74,13 @@ using lox = compose<
     scan_ct<s>,
     detect_errors,
     parse_ct,
-    at<0>,
     interpret_ct>;
 }
 
 int main()
 {
     using output = ctlox::run<
-        ctlox::lox<"-2 + 2 == 0">,
+        ctlox::lox<"-2 + 2 == 0;">,
         ctlox::returned>;
-    static_assert(output::value == true);
+    static_assert(output::values == std::tuple(true));
 }
