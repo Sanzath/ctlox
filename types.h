@@ -74,6 +74,9 @@ struct token_ct {
     static constexpr inline auto literal = _literal;
 };
 
+template <typename Name, typename Initializer>
+struct var_stmt { };
+
 template <typename Expr>
 struct expression_stmt { };
 
@@ -82,6 +85,9 @@ struct print_stmt { };
 
 template <auto _literal>
 struct literal_expr { };
+
+template <typename Name>
+struct variable_expr { };
 
 template <typename Operator, typename Right>
 struct unary_expr { };
