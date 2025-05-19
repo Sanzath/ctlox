@@ -81,16 +81,16 @@ int main()
 {
     using output = ctlox::run<
         ctlox::lox<R"(
-            print -2 + 2 == 0;
-            print "bar";
-            print 100 * 200;)">,
+            var foo = 10;
+            print foo + 15.5;
+            var foo;
+            print foo;)">,
         ctlox::listed>;
 
     using namespace ctlox::literals;
     static_assert(std::is_same_v<
         output,
         ctlox::list<
-            ctlox::value_t<true>,
-            ctlox::value_t<"bar"_ct>,
-            ctlox::value_t<100.0 * 200.0>>>);
+            ctlox::value_t<25.5>,
+            ctlox::value_t<ctlox::nil>>>);
 }

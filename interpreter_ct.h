@@ -191,6 +191,35 @@ struct environment_base {
     template <string_ct name, typename Value, typename... Entries>
     using define = define_impl<name, Value, Entries...>::template f<>;
 
+    template <string_ct name, typename Value, typename... Entries>
+    struct assign_impl {
+        static_assert(false, "logic error: unhandled case");
+    };
+
+    template <string_ct name, typename Value>
+    struct assign_impl<name, Value> {
+        // Not found
+        static_assert(false, "Undefined variable.");
+    };
+
+    template <string_ct name, typename Value, typename Entry, typename... Entries>
+    struct assign_impl<name, Value, Entry, Entries...> {
+        // searching
+        template <typename... Entries2>
+        using f = assign_impl<name, Value, Entries...>::template f<Entries2..., Entry>;
+    };
+
+    template <string_ct name, typename Value, typename OldValue, typename... Entries>
+    struct assign_impl<name, Value, entry<name, OldValue>, Entries...> {
+        // found: replace value
+        template <typename... Entries2>
+        using f = environment_ct<Entries2..., entry<name, Value>, Entries...>;
+    };
+
+    // returns modified environment, errors if name not found
+    template <string_ct name, typename Value, typename... Entries>
+    using assign = assign_impl<name, Value, Entries...>::template f<>;
+
     template <string_ct name, typename... Entries>
     struct get_impl {
         static_assert(false, "logic error: unhandled case");
@@ -222,6 +251,9 @@ template <typename... Entries>
 struct environment_ct : private environment_base {
     template <string_ct name, typename Value>
     using define = environment_base::define<name, Value, Entries...>;
+
+    template <string_ct name, typename Value>
+    using assign = environment_base::assign<name, Value, Entries...>;
 
     template <string_ct name>
     using get = environment_base::get<name, Entries...>;
@@ -268,6 +300,8 @@ private:
         return nil;
     }
 
+    struct evaluate;
+
     template <typename Operator>
     struct apply_unary_op {
         template <typename T>
@@ -294,8 +328,6 @@ private:
         template <typename C, typename... Ts>
         using fn = impl<Ts...>::template f<C>;
     };
-
-    struct evaluate;
 
     template <typename LeftValue, typename Operator>
     struct apply_binary_op {
@@ -383,6 +415,19 @@ private:
         using fn = impl<Ts...>::template f<C>;
     };
 
+    template <typename Name>
+    struct apply_assign_op {
+        template <typename Environment, typename Value, typename... Ts>
+        struct impl {
+            template <typename C>
+            using f = calln<C, typename Environment::template assign<Name::lexeme, Value>, Value, Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename... Ts>
+        using fn = impl<Ts...>::template f<C>;
+    };
+
     struct evaluate {
         template <typename Environment, typename... Ts>
         struct impl {
@@ -398,7 +443,15 @@ private:
         template <typename Environment, typename Name, typename... Ts>
         struct impl<Environment, variable_expr<Name>, Ts...> {
             template <typename C>
-            using f = calln<C, Environment, typename Environment::template get<Name>, Ts...>;
+            using f = calln<C, Environment, typename Environment::template get<Name::lexeme>, Ts...>;
+        };
+
+        template <typename Environment, typename Name, typename ValueExpr, typename... Ts>
+        struct impl<Environment, assign_expr<Name, ValueExpr>, Ts...> {
+            template <typename C>
+            using f = calln<
+                compose<evaluate, apply_assign_op<Name>, C>,
+                Environment, ValueExpr, Ts...>;
         };
 
         template <typename Environment, typename Expr, typename... Ts>
@@ -534,4 +587,5 @@ constexpr bool r4 = test<R"(print 4 <= 4;)", true>();
 constexpr bool r5 = test<R"(print 4 < 3;)", false>();
 constexpr bool r6 = test<"print 5 * 100 / 22;", 5.0 * 100.0 / 22.0>();
 constexpr bool r7 = test<"print 5 * (100 / 22);", 5.0 * (100.0 / 22.0)>();
+constexpr bool r8 = test<"var foo; var bar; foo = (bar = 2) + 5; print foo;", 7.0>();
 }

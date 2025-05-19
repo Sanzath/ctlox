@@ -161,7 +161,7 @@ private:
 
     using consume_term = compose<consume_factor, maybe_match_sum_op>;
 
-    static constexpr inline bool is_comparison_op(token_type type)
+    static constexpr bool is_comparison_op(token_type type)
     {
         return type == token_type::greater
             || type == token_type::greater_equal
@@ -215,7 +215,50 @@ private:
 
     using consume_equality = compose<consume_comparison, maybe_match_equality_op>;
 
-    using consume_expression = consume_equality;
+    struct maybe_match_assign_op;
+
+    using consume_assignment = compose<consume_equality, maybe_match_assign_op>;
+
+    template <typename VarExpr>
+    struct bind_assign_expr {
+        static_assert(false, "Invalid assignment target.");
+    };
+
+    template <typename Name>
+    struct bind_assign_expr<variable_expr<Name>> {
+        template <typename ValueExpr, typename... Ts>
+        struct impl {
+            template <typename C>
+            using f = calln<C, assign_expr<Name, ValueExpr>, Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename... Ts>
+        using fn = impl<Ts...>::template f<C>;
+    };
+
+    struct maybe_match_assign_op {
+        template <typename... Ts>
+        struct impl {
+            template <typename C>
+            using f = calln<C, Ts...>;
+        };
+
+        template <typename E, typename Token, typename... Ts>
+            requires(Token::type == token_type::equal)
+        struct impl<E, Token, Ts...> {
+            template <typename C>
+            using f = calln<
+                compose<consume_assignment, bind_assign_expr<E>, C>,
+                Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename... Ts>
+        using fn = impl<Ts...>::template f<C>;
+    };
+
+    using consume_expression = consume_assignment;
 
     struct consume_expression_workaround {
         using type = consume_expression;
@@ -482,12 +525,30 @@ static_assert(test<"(7 == 2) * 3.5;"_ct,
 static_assert(test<R"(1; print ("foo");)",
     expression_stmt<literal_expr<1.0>>,
     print_stmt<grouping_expr<literal_expr<"foo"_ct>>>>);
-static_assert(test < "var foo; var bar = foo;",
+static_assert(test<"var foo; var bar = foo;",
     var_stmt<
         token_ct<4, token_type::identifier, "foo">,
         literal_expr<nil>>,
     var_stmt<
         token_ct<13, token_type::identifier, "bar">,
         variable_expr<token_ct<19, token_type::identifier, "foo">>>>);
+static_assert(test<
+    "var foo; var bar; foo = (bar = 2) + 2;",
+    var_stmt<
+        token_ct<4, token_type::identifier, "foo">,
+        literal_expr<nil>>,
+    var_stmt<
+        token_ct<13, token_type::identifier, "bar">,
+        literal_expr<nil>>,
+    expression_stmt<
+        assign_expr<
+            token_ct<18, token_type::identifier, "foo">,
+            binary_expr<
+                grouping_expr<
+                    assign_expr<
+                        token_ct<25, token_type::identifier, "bar">,
+                        literal_expr<2.0>>>,
+                token_ct<34, token_type::plus, "+">,
+                literal_expr<2.0>>>>>);
 
 }
