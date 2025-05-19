@@ -294,7 +294,7 @@ private:
         struct impl<Token, Identifier, Semicolon, Ts...> {
             // var declaration without initializer
             template <typename C>
-            using f = calln<C, Ts..., var_stmt<Identifier, void>>;
+            using f = calln<C, Ts..., var_stmt<Identifier, literal_expr<nil>>>;
         };
 
         template <typename Token, typename Identifier, typename Equal, typename... Ts>
@@ -485,7 +485,7 @@ static_assert(test<R"(1; print ("foo");)",
 static_assert(test < "var foo; var bar = foo;",
     var_stmt<
         token_ct<4, token_type::identifier, "foo">,
-        void>,
+        literal_expr<nil>>,
     var_stmt<
         token_ct<13, token_type::identifier, "bar">,
         variable_expr<token_ct<19, token_type::identifier, "foo">>>>);

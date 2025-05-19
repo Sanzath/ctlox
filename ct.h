@@ -349,6 +349,60 @@ public:
     using fn = dcall<at_impl<0>, sizeof...(Ts)>::template f<C, Ts...>;
 };
 
+// Algorithm: drop the element at index I
+template <std::size_t I>
+struct drop_at {
+private:
+    template <std::size_t _current, typename... Ts>
+    struct impl;
+
+    template <std::size_t _current, typename T, typename... Ts>
+        requires(_current < I)
+    struct impl<_current, T, Ts...> {
+        template <typename C, typename... Us>
+        using f = impl<_current + 1, Ts...>::template f<C, Us..., T>;
+    };
+
+    template <typename Dropped, typename... Ts>
+    struct impl<I, Dropped, Ts...> {
+        template <typename C, typename... Us>
+        using f = calln<C, Us..., Ts...>;
+    };
+
+public:
+    using has_fn = void;
+    template <accepts_pack C, typename... Ts>
+        requires(I < sizeof...(Ts))
+    using fn = impl<0, Ts...>::template f<C>;
+};
+
+// Algorithm: take the element at index I and move it to the end of the pack
+template <std::size_t I>
+struct move_to_back {
+private:
+    template <std::size_t _current, typename... Ts>
+    struct impl;
+
+    template <std::size_t _current, typename T, typename... Ts>
+        requires(_current < I)
+    struct impl<_current, T, Ts...> {
+        template <typename C, typename... Us>
+        using f = impl<_current + 1, Ts...>::template f<C, Us..., T>;
+    };
+
+    template <typename Found, typename... Ts>
+    struct impl<I, Found, Ts...> {
+        template <typename C, typename... Us>
+        using f = calln<C, Us..., Ts..., Found>;
+    };
+
+public:
+    using has_fn = void;
+    template <accepts_pack C, typename... Ts>
+        requires(I < sizeof...(Ts))
+    using fn = impl<0, Ts...>::template f<C>;
+};
+
 // disambiguation: as_one and as_pack may be used as the first item
 // in a composition to disambiguate the general call case where only
 // one argument is passed in.

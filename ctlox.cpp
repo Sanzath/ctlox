@@ -84,8 +84,13 @@ int main()
             print -2 + 2 == 0;
             print "bar";
             print 100 * 200;)">,
-        ctlox::returned>;
+        ctlox::listed>;
 
     using namespace ctlox::literals;
-    static_assert(output::values == std::tuple(true, "bar"_ct, 100.0 * 200.0));
+    static_assert(std::is_same_v<
+        output,
+        ctlox::list<
+            ctlox::value_t<true>,
+            ctlox::value_t<"bar"_ct>,
+            ctlox::value_t<100.0 * 200.0>>>);
 }

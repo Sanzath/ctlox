@@ -100,6 +100,7 @@ struct grouping_expr { };
 
 template <auto _value>
 struct value_t {
+    using type = value_t;
     using value_type = decltype(_value);
     static constexpr inline value_type value = _value;
 
