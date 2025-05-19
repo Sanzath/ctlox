@@ -7,8 +7,12 @@
 namespace ctlox {
 struct parse_ct {
 private:
+    struct consume_expression_workaround;
+    template <std::size_t N>
+    using consume_expression_t = typename dcall<consume_expression_workaround, N>::type;
+
     struct consume_right_paren {
-        template <typename... Ts>
+        template <bool is_right_paren>
         struct impl {
             // TODO: is there a way to error out without a hard error?
             // With tokens, we could just intersperse the errors in the tokens.
@@ -17,200 +21,197 @@ private:
             static_assert(false, "Expect ')' after expression.");
         };
 
-        template <typename E, typename T, typename... Ts>
-            requires(T::type == token_type::right_paren)
-        struct impl<E, T, Ts...> {
-            template <typename C>
-            using f = calln<C, grouping_expr<E>, Ts...>;
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
+            using f = calln<C, grouping_expr<Expr>, Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<Token::type == token_type::right_paren>::template f<C, Expr, Token, Ts...>;
     };
 
-    struct consume_expression_workaround;
-
     struct consume_primary {
-        template <typename... Ts>
+        template <token_type type>
         struct impl {
             static_assert(false, "Expect expression.");
         };
 
-        template <typename Token, typename... Ts>
-            requires(Token::literal != none)
-        struct impl<Token, Ts...> {
-            template <typename C>
+        static constexpr bool is_literal(token_type type)
+        {
+            return type == token_type::string
+                || type == token_type::number
+                || type == token_type::_nil
+                || type == token_type::_true
+                || type == token_type::_false;
+        }
+
+        template <token_type type>
+            requires(is_literal(type))
+        struct impl<type> {
+            template <typename C, typename Token, typename... Ts>
             using f = calln<C, literal_expr<Token::literal>, Ts...>;
         };
 
-        template <typename Token, typename... Ts>
-            requires(Token::type == token_type::identifier)
-        struct impl<Token, Ts...> {
-            template <typename C>
+        template <>
+        struct impl<token_type::identifier> {
+            template <typename C, typename Token, typename... Ts>
             using f = calln<C, variable_expr<Token>, Ts...>;
         };
 
-        template <typename Token, typename... Ts>
-            requires(Token::type == token_type::left_paren)
-        struct impl<Token, Ts...> {
-            template <typename C>
+        template <>
+        struct impl<token_type::left_paren> {
+            template <typename C, typename Token, typename... Ts>
             using f = calln<
-                compose<typename dcall<consume_expression_workaround, sizeof(C)>::type, consume_right_paren, C>,
+                compose<consume_expression_t<sizeof...(Ts)>, consume_right_paren, C>,
                 Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Token, typename... Ts>
+        using fn = impl<Token::type>::template f<C, Token, Ts...>;
     };
 
     template <typename Token>
     struct bind_unary_expr {
-        template <typename... Ts>
-        struct impl { };
-
-        template <typename E, typename... Tokens>
-        struct impl<E, Tokens...> {
-            template <typename C>
-            using f = calln<C, unary_expr<Token, E>, Tokens...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename... Ts>
+        using fn = calln<C, unary_expr<Token, Expr>, Ts...>;
     };
 
     struct consume_unary {
-        template <typename... Tokens>
-        struct impl : consume_primary::impl<Tokens...> { };
+        template <token_type type>
+        struct impl : consume_primary::impl<type> { };
 
-        template <typename Token, typename... Tokens>
-            requires(Token::type == token_type::bang || Token::type == token_type::minus)
-        struct impl<Token, Tokens...> {
-            template <typename C>
+        template <token_type type>
+            requires(type == token_type::bang || type == token_type::minus)
+        struct impl<type> {
+            template <typename C, typename Token, typename... Ts>
             using f = calln<
                 compose<consume_unary, bind_unary_expr<Token>, C>,
-                Tokens...>;
+                Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Token, typename... Ts>
+        using fn = impl<Token::type>::template f<C, Token, Ts...>;
     };
 
     template <typename LeftExpr, typename Token>
     struct bind_binary_expr {
-        template <typename... Ts>
-        struct impl { };
-
-        template <typename RightExpr, typename... Tokens>
-        struct impl<RightExpr, Tokens...> {
-            template <typename C>
-            using f = calln<C, binary_expr<LeftExpr, Token, RightExpr>, Tokens...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename RightExpr, typename... Ts>
+        using fn = calln<C, binary_expr<LeftExpr, Token, RightExpr>, Ts...>;
     };
 
     struct maybe_match_product_op {
-        template <typename... Ts>
+        template <bool is_product_op>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<C, Ts...>;
         };
 
-        template <typename E, typename Token, typename... Tokens>
-            requires(Token::type == token_type::slash || Token::type == token_type::star)
-        struct impl<E, Token, Tokens...> {
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_unary, bind_binary_expr<E, Token>, maybe_match_product_op, C>,
-                Tokens...>;
+                compose<consume_unary, bind_binary_expr<Expr, Token>, maybe_match_product_op, C>,
+                Ts...>;
         };
 
+        static constexpr bool is_product_op(token_type type)
+        {
+            return type == token_type::slash || type == token_type::star;
+        }
+
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<is_product_op(Token::type)>::template f<C, Expr, Token, Ts...>;
     };
 
     using consume_factor = compose<consume_unary, maybe_match_product_op>;
 
     struct maybe_match_sum_op {
-        template <typename... Ts>
+        template <bool is_sum_op>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<C, Ts...>;
         };
 
-        template <typename E, typename Token, typename... Tokens>
-            requires(Token::type == token_type::plus || Token::type == token_type::minus)
-        struct impl<E, Token, Tokens...> {
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_factor, bind_binary_expr<E, Token>, maybe_match_sum_op, C>,
-                Tokens...>;
+                compose<consume_factor, bind_binary_expr<Expr, Token>, maybe_match_sum_op, C>,
+                Ts...>;
         };
 
+        static constexpr bool is_sum_op(token_type type)
+        {
+            return type == token_type::plus || type == token_type::minus;
+        }
+
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<is_sum_op(Token::type)>::template f<C, Expr, Token, Ts...>;
     };
 
     using consume_term = compose<consume_factor, maybe_match_sum_op>;
 
-    static constexpr bool is_comparison_op(token_type type)
-    {
-        return type == token_type::greater
-            || type == token_type::greater_equal
-            || type == token_type::less
-            || type == token_type::less_equal;
-    }
-
     struct maybe_match_comparison_op {
-        template <typename... Ts>
+        template <bool is_comparison_op>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<C, Ts...>;
         };
 
-        template <typename E, typename Token, typename... Tokens>
-            requires(is_comparison_op(Token::type))
-        struct impl<E, Token, Tokens...> {
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_term, bind_binary_expr<E, Token>, maybe_match_comparison_op, C>,
-                Tokens...>;
+                compose<consume_term, bind_binary_expr<Expr, Token>, maybe_match_comparison_op, C>,
+                Ts...>;
         };
 
+        static constexpr bool is_comparison_op(token_type type)
+        {
+            return type == token_type::greater
+                || type == token_type::greater_equal
+                || type == token_type::less
+                || type == token_type::less_equal;
+        }
+
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<is_comparison_op(Token::type)>::template f<C, Expr, Token, Ts...>;
     };
 
     using consume_comparison = compose<consume_term, maybe_match_comparison_op>;
 
     struct maybe_match_equality_op {
-        template <typename... Ts>
+        template <bool is_equality_op>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<C, Ts...>;
         };
 
-        template <typename E, typename Token, typename... Tokens>
-            requires(Token::type == token_type::equal_equal || Token::type == token_type::bang_equal)
-        struct impl<E, Token, Tokens...> {
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_comparison, bind_binary_expr<E, Token>, maybe_match_equality_op, C>,
-                Tokens...>;
+                compose<consume_comparison, bind_binary_expr<Expr, Token>, maybe_match_equality_op, C>,
+                Ts...>;
         };
 
+        static constexpr bool is_equality_op(token_type type)
+        {
+            return type == token_type::equal_equal || type == token_type::bang_equal;
+        }
+
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<is_equality_op(Token::type)>::template f<C, Expr, Token, Ts...>;
     };
 
     using consume_equality = compose<consume_comparison, maybe_match_equality_op>;
@@ -219,43 +220,38 @@ private:
 
     using consume_assignment = compose<consume_equality, maybe_match_assign_op>;
 
-    template <typename VarExpr>
+    template <typename LeftExpr>
     struct bind_assign_expr {
         static_assert(false, "Invalid assignment target.");
     };
 
     template <typename Name>
     struct bind_assign_expr<variable_expr<Name>> {
-        template <typename ValueExpr, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, assign_expr<Name, ValueExpr>, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename ValueExpr, typename... Ts>
+        using fn = calln<C, assign_expr<Name, ValueExpr>, Ts...>;
     };
 
     struct maybe_match_assign_op {
-        template <typename... Ts>
+        template <bool is_assign_op>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<C, Ts...>;
         };
 
-        template <typename E, typename Token, typename... Ts>
-            requires(Token::type == token_type::equal)
-        struct impl<E, Token, Ts...> {
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_assignment, bind_assign_expr<E>, C>,
+                compose<consume_assignment, bind_assign_expr<Expr>, C>,
                 Ts...>;
         };
 
+        static constexpr bool is_assign_op(token_type type) { return type == token_type::equal; }
+
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<is_assign_op(Token::type)>::template f<C, Expr, Token, Ts...>;
     };
 
     using consume_expression = consume_assignment;
@@ -264,117 +260,157 @@ private:
         using type = consume_expression;
     };
 
-    struct consume_semicolon {
-        template <typename... Ts>
+    struct match_semicolon {
+        template <bool is_semicolon>
         struct impl {
             static_assert(false, "Expect ';' after statement.");
         };
 
-        template <typename E, typename Token, typename... Ts>
-            requires(Token::type == token_type::semicolon)
-        struct impl<E, Token, Ts...> {
-            template <typename C>
-            using f = calln<C, E, Ts...>;
+        template <>
+        struct impl<true> {
+            template <typename C, typename Expr, typename Token, typename... Ts>
+            using f = calln<C, Expr, Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename Token, typename... Ts>
+        using fn = impl<(Token::type == token_type::semicolon)>::template f<C, Expr, Token, Ts...>;
     };
 
     template <template <typename...> typename Stmt, typename... Args>
     struct add_statement {
-        template <typename E, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, Ts..., Stmt<Args..., E>>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Expr, typename... Ts>
+        using fn = calln<C, Ts..., Stmt<Args..., Expr>>;
     };
 
     struct consume_statement {
-        template <typename... Ts>
+        enum class strategy {
+            expression,
+            print,
+        };
+
+        constexpr static strategy classify(token_type type)
+        {
+            switch (type) {
+            case token_type::_print:
+                return strategy::print;
+            default:
+                return strategy::expression;
+            }
+        }
+
+        template <strategy s>
         struct impl {
-            // base case: expression statement
-            template <typename C>
+            static_assert(false, "logic error: unhandled case.");
+        };
+
+        template <>
+        struct impl<strategy::expression> {
+            template <typename C, typename... Ts>
             using f = calln<
-                compose<consume_expression, consume_semicolon, add_statement<expression_stmt>, C>,
+                compose<consume_expression, match_semicolon, add_statement<expression_stmt>, C>,
                 Ts...>;
         };
 
-        template <typename Token, typename... Ts>
-            requires(Token::type == token_type::_print)
-        struct impl<Token, Ts...> {
-            // print statement
-            template <typename C>
+        template <>
+        struct impl<strategy::print> {
+            template <typename C, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_expression, consume_semicolon, add_statement<print_stmt>, C>,
+                compose<consume_expression, match_semicolon, add_statement<print_stmt>, C>,
                 Ts...>;
         };
 
         using has_fn = void;
-        template <accepts_pack C, typename... Tokens>
-        using fn = impl<Tokens...>::template f<C>;
+        template <accepts_pack C, typename Token, typename... Ts>
+        using fn = impl<classify(Token::type)>::template f<C, Token, Ts...>;
+    };
+
+    struct maybe_match_variable_init {
+        template <bool has_init>
+        struct impl {
+            template <typename C, typename... Ts>
+            using f = calln<C, literal_expr<nil>, Ts...>;
+        };
+
+        template <>
+        struct impl<true> {
+            template <typename C, typename Equal, typename... Ts>
+            using f = calln<compose<consume_expression, C>, Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename Token, typename... Ts>
+        using fn = impl<(Token::type == token_type::equal)>::template f<C, Token, Ts...>;
+    };
+
+    struct consume_variable_declaration {
+        template <bool has_id>
+        struct impl {
+            static_assert(false, "Expect variable name.");
+        };
+
+        template <>
+        struct impl<true> {
+            template <typename C, typename Var, typename Identifier, typename... Ts>
+            using f = calln<
+                compose<maybe_match_variable_init, match_semicolon, add_statement<var_stmt, Identifier>, C>,
+                Ts...>;
+        };
+
+        using has_fn = void;
+        template <typename C, typename Var, typename Token, typename... Ts>
+        using fn = impl<(Token::type == token_type::identifier)>::template f<C, Var, Token, Ts...>;
     };
 
     struct consume_declaration {
-        template <typename... Ts>
-        struct impl : consume_statement::impl<Ts...> { };
-
-        template <typename Token, typename... Ts>
-            requires(Token::type == token_type::_var)
-        struct impl<Token, Ts...> {
-            static_assert(false, "Expect form 'var <name>;' or 'var <name> = <expr>;'.");
+        enum class strategy {
+            statement,
+            var,
         };
 
-        template <typename Token, typename Identifier, typename Semicolon, typename... Ts>
-            requires(Token::type == token_type::_var
-                && Identifier::type == token_type::identifier
-                && Semicolon::type == token_type::semicolon)
-        struct impl<Token, Identifier, Semicolon, Ts...> {
-            // var declaration without initializer
-            template <typename C>
-            using f = calln<C, Ts..., var_stmt<Identifier, literal_expr<nil>>>;
+        static constexpr strategy classify(token_type type)
+        {
+            switch (type) {
+            case token_type::_var:
+                return strategy::var;
+            default:
+                return strategy::statement;
+            }
+        }
+
+        template <strategy s>
+        struct impl {
+            static_assert(false, "logic error: unhandled case.");
         };
 
-        template <typename Token, typename Identifier, typename Equal, typename... Ts>
-            requires(Token::type == token_type::_var
-                && Identifier::type == token_type::identifier
-                && Equal::type == token_type::equal)
-        struct impl<Token, Identifier, Equal, Ts...> {
-            // var declaration with initializer
-            template <typename C>
-            using f = calln<
-                compose<consume_expression, consume_semicolon, add_statement<var_stmt, Identifier>, C>,
-                Ts...>;
-        };
+        template <>
+        struct impl<strategy::statement> : consume_statement { };
+
+        template <>
+        struct impl<strategy::var> : consume_variable_declaration { };
 
         using has_fn = void;
-        template <accepts_pack C, typename... Tokens>
-        using fn = impl<Tokens...>::template f<C>;
+        template <accepts_pack C, typename Token, typename... Ts>
+        using fn = impl<classify(Token::type)>::template fn<C, Token, Ts...>;
     };
 
     struct consume_program {
-        template <typename... Ts>
+        template <bool is_eof>
         struct impl {
-            template <typename C>
+            template <typename C, typename... Ts>
             using f = calln<compose<consume_declaration, consume_program, C>, Ts...>;
         };
 
-        template <typename Token, typename... Statements>
-            requires(Token::type == token_type::eof)
-        struct impl<Token, Statements...> {
-            // found eof: done parsing
-            template <typename C>
+        template <>
+        struct impl<true> {
+            template <typename C, typename Eof, typename... Statements>
             using f = calln<C, Statements...>;
         };
 
         using has_fn = void;
-        template <accepts_pack C, typename... Tokens>
-        using fn = impl<Tokens...>::template f<C>;
+        template <accepts_pack C, typename Token, typename... Ts>
+        using fn = impl<(Token::type == token_type::eof)>::template f<C, Token, Ts...>;
     };
 
 public:

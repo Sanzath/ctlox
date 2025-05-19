@@ -1,163 +1,14 @@
 #pragma once
 
 #include "types.h"
-#include <utility>
-#include <vector>
 
 namespace ctlox {
-struct interpreter {
-    template <typename... Statements>
-    constexpr auto interpret(Statements... statements)
-    {
-        return std::tuple_cat(this->execute(statements)...);
-    }
-
-    template <typename Expr>
-    constexpr std::tuple<> execute(expression_stmt<Expr>)
-    {
-        this->evaluate(Expr {});
-        return {};
-    }
-
-    template <typename Expr>
-    constexpr auto execute(print_stmt<Expr>)
-    {
-        return std::tuple(this->evaluate(Expr {}));
-    }
-
-    template <auto _literal>
-    constexpr auto evaluate(literal_expr<_literal>)
-    {
-        return _literal;
-    }
-
-    template <typename Expr>
-    constexpr auto evaluate(grouping_expr<Expr>)
-    {
-        return this->evaluate(Expr {});
-    }
-
-    template <typename Token, typename Expr>
-    constexpr auto evaluate(unary_expr<Token, Expr>)
-    {
-        auto right = this->evaluate(Expr {});
-
-        if constexpr (Token::type == token_type::bang) {
-            return !this->is_truthy(right);
-        } else if constexpr (Token::type == token_type::minus) {
-            static_assert(std::same_as<decltype(right), double>);
-            return -right;
-        } else {
-            static_assert(false, "unreachable");
-            return nil;
-        }
-    }
-
-    template <typename LeftExpr, typename Token, typename RightExpr>
-    constexpr auto evaluate(binary_expr<LeftExpr, Token, RightExpr>)
-    {
-        auto left = this->evaluate(LeftExpr {});
-        auto right = this->evaluate(RightExpr {});
-
-        if constexpr (Token::type == token_type::greater) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left > right;
-        }
-
-        if constexpr (Token::type == token_type::greater_equal) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left >= right;
-        }
-
-        if constexpr (Token::type == token_type::less) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left < right;
-        }
-
-        if constexpr (Token::type == token_type::less_equal) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left <= right;
-        }
-
-        if constexpr (Token::type == token_type::equal_equal) {
-            return this->equals(left, right);
-        }
-
-        if constexpr (Token::type == token_type::bang_equal) {
-            return !this->equals(left, right);
-        }
-
-        if constexpr (Token::type == token_type::minus) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left - right;
-        }
-
-        if constexpr (Token::type == token_type::plus) {
-            return this->plus(left, right);
-        }
-
-        if constexpr (Token::type == token_type::slash) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left / right;
-        }
-
-        if constexpr (Token::type == token_type::star) {
-            static_assert(std::same_as<decltype(left), double>);
-            static_assert(std::same_as<decltype(right), double>);
-            return left * right;
-        }
-    }
-
-private:
-    template <typename Value>
-    constexpr bool is_truthy(const Value& value)
-    {
-        if constexpr (std::same_as<Value, nil_t>)
-            return false;
-        if constexpr (std::same_as<Value, bool>)
-            return value;
-        return true; // Strings and numbers are always truthy
-    }
-
-    template <typename Left, typename Right>
-    constexpr bool equals(const Left& left, const Right& right)
-    {
-        if constexpr (std::same_as<Left, Right>) {
-            return left == right;
-        } else {
-            return false;
-        }
-    }
-
-    constexpr double plus(const double& left, const double& right)
-    {
-        return left + right;
-    }
-
-    template <std::size_t _left, std::size_t _right>
-    constexpr auto plus(const string_ct<_left>& left, const string_ct<_right>& right)
-    {
-        return concat(left, right);
-    }
-
-    template <typename Left, typename Right>
-    constexpr auto plus(const Left&, const Right&)
-    {
-        static_assert(false, "Operands must be two numbers or two strings.");
-        return nil;
-    }
-};
 
 template <typename... Entries>
 struct environment_ct;
 
 struct environment_base {
+    // TODO: maybe reduce templates?
     template <string_ct name, typename Value>
     struct entry { };
 
@@ -261,7 +112,7 @@ struct environment_ct : private environment_base {
 
 struct interpret_ct {
 private:
-    struct sentinel { };
+    struct end_of_program { };
 
     template <typename T>
     static constexpr bool is_truthy(T value)
@@ -282,6 +133,7 @@ private:
             return false;
         }
     }
+
     static constexpr double plus(const double& left, const double& right)
     {
         return left + right;
@@ -318,15 +170,9 @@ private:
             }
         }
 
-        template <typename Environment, typename Value, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, Environment, value_t<apply(Value::value)>, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename Value, typename... Ts>
+        using fn = calln<C, Environment, value_t<apply(Value::value)>, Ts...>;
     };
 
     template <typename LeftValue, typename Operator>
@@ -389,160 +235,136 @@ private:
             }
         }
 
-        template <typename Environment, typename RightValue, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, Environment, value_t<apply(LeftValue::value, RightValue::value)>, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename RightValue, typename... Ts>
+        using fn = calln<C, Environment, value_t<apply(LeftValue::value, RightValue::value)>, Ts...>;
     };
 
     template <typename Operator, typename RightExpr>
     struct evaluate_right {
-        template <typename Environment, typename LeftValue, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<
-                compose<evaluate, apply_binary_op<LeftValue, Operator>, C>,
-                Environment, RightExpr, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename LeftValue, typename... Ts>
+        using fn = calln<
+            compose<evaluate, apply_binary_op<LeftValue, Operator>, C>,
+            Environment, RightExpr, Ts...>;
     };
 
     template <typename Name>
     struct apply_assign_op {
-        template <typename Environment, typename Value, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, typename Environment::template assign<Name::lexeme, Value>, Value, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename Value, typename... Ts>
+        using fn = calln<C, typename Environment::template assign<Name::lexeme, Value>, Value, Ts...>;
     };
 
     struct evaluate {
-        template <typename Environment, typename... Ts>
+        template <typename Expr>
         struct impl {
             static_assert(false, "logic error: unhandled case");
         };
 
-        template <typename Environment, auto _value, typename... Ts>
-        struct impl<Environment, literal_expr<_value>, Ts...> {
-            template <typename C>
+        template <auto _value>
+        struct impl<literal_expr<_value>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<C, Environment, value_t<_value>, Ts...>;
         };
 
-        template <typename Environment, typename Name, typename... Ts>
-        struct impl<Environment, variable_expr<Name>, Ts...> {
-            template <typename C>
+        template <typename Name>
+        struct impl<variable_expr<Name>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<C, Environment, typename Environment::template get<Name::lexeme>, Ts...>;
         };
 
-        template <typename Environment, typename Name, typename ValueExpr, typename... Ts>
-        struct impl<Environment, assign_expr<Name, ValueExpr>, Ts...> {
-            template <typename C>
+        template <typename Name, typename ValueExpr>
+        struct impl<assign_expr<Name, ValueExpr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<
                 compose<evaluate, apply_assign_op<Name>, C>,
                 Environment, ValueExpr, Ts...>;
         };
 
-        template <typename Environment, typename Expr, typename... Ts>
-        struct impl<Environment, grouping_expr<Expr>, Ts...> {
-            template <typename C>
+        template <typename Expr>
+        struct impl<grouping_expr<Expr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<compose<evaluate, C>, Environment, Expr, Ts...>;
         };
 
-        template <typename Environment, typename Operator, typename Expr, typename... Ts>
-        struct impl<Environment, unary_expr<Operator, Expr>, Ts...> {
-            template <typename C>
+        template <typename Operator, typename Expr>
+        struct impl<unary_expr<Operator, Expr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<
                 compose<evaluate, apply_unary_op<Operator>, C>,
                 Environment, Expr, Ts...>;
         };
 
-        template <typename Environment, typename LeftExpr, typename Operator, typename RightExpr, typename... Ts>
-        struct impl<Environment, binary_expr<LeftExpr, Operator, RightExpr>, Ts...> {
-            template <typename C>
+        template <typename LeftExpr, typename Operator, typename RightExpr>
+        struct impl<binary_expr<LeftExpr, Operator, RightExpr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<
                 compose<evaluate, evaluate_right<Operator, RightExpr>, C>,
                 Environment, LeftExpr, Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename Expr, typename... Ts>
+        using fn = impl<Expr>::template f<C, Environment, Ts...>;
     };
 
     template <string_ct name>
     struct bind_variable {
-        template <typename Environment, typename Value, typename... Ts>
-        struct impl {
-            template <typename C>
-            using f = calln<C, typename Environment::template define<name, Value>, Ts...>;
-        };
-
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename Value, typename... Ts>
+        using fn = calln<C, typename Environment::template define<name, Value>, Ts...>;
     };
 
     struct execute {
         using ignore_result = drop_at<1>;
         using append_result = move_to_back<1>;
 
-        template <typename... Ts>
+        template <typename Stmt>
         struct impl {
             static_assert(false, "logic error: unhandled case");
         };
 
-        template <typename Environment, typename Expr, typename... Ts>
-        struct impl<Environment, expression_stmt<Expr>, Ts...> {
-            template <typename C>
+        template <typename Expr>
+        struct impl<expression_stmt<Expr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<compose<evaluate, ignore_result, C>, Environment, Expr, Ts...>;
         };
 
-        template <typename Environment, typename Expr, typename... Ts>
-        struct impl<Environment, print_stmt<Expr>, Ts...> {
-            template <typename C>
+        template <typename Expr>
+        struct impl<print_stmt<Expr>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<compose<evaluate, append_result, C>, Environment, Expr, Ts...>;
         };
 
-        template <typename Environment, typename Name, typename Initialiser, typename... Ts>
-        struct impl<Environment, var_stmt<Name, Initialiser>, Ts...> {
-            template <typename C>
+        template <typename Name, typename Initialiser>
+        struct impl<var_stmt<Name, Initialiser>> {
+            template <typename C, typename Environment, typename... Ts>
             using f = calln<compose<evaluate, bind_variable<Name::lexeme>, C>, Environment, Initialiser, Ts...>;
         };
 
         using has_fn = void;
-        template <typename C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <typename C, typename Environment, typename Stmt, typename... Ts>
+        using fn = impl<Stmt>::template f<C, Environment, Ts...>;
     };
 
     struct interpret {
-        template <typename... Ts>
+        template <bool is_eop>
         struct impl {
-            template <typename C>
-            using f = calln<compose<execute, interpret, C>, Ts...>;
+            template <typename C, typename Environment, typename... Ts>
+            using f = calln<compose<execute, interpret, C>, Environment, Ts...>;
         };
 
-        template <typename Environment, typename... Output>
-        struct impl<Environment, sentinel, Output...> {
+        template <>
+        struct impl<true> {
             // found sentinel: done interpreting
-            template <typename C>
+            template <typename C, typename Environment, typename EndOfProgram, typename... Output>
             using f = calln<C, Output...>;
         };
 
         using has_fn = void;
-        template <accepts_pack C, typename... Ts>
-        using fn = impl<Ts...>::template f<C>;
+        template <accepts_pack C, typename Environment, typename T0, typename... Ts>
+        using fn = impl<std::is_same_v<T0, end_of_program>>::template f<C, Environment, T0, Ts...>;
     };
 
 public:
@@ -550,7 +372,7 @@ public:
     template <accepts_pack C, typename... Statements>
     using fn = calln<
         compose<interpret, C>,
-        environment_ct<>, Statements..., sentinel>;
+        environment_ct<>, Statements..., end_of_program>;
 };
 }
 

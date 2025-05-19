@@ -5,15 +5,16 @@
 
 namespace ctlox {
 // dcall: template magic that allows alias pack size "mismatches"
-template <bool b, typename C>
-struct dependant_impl;
-template <typename C>
-struct dependant_impl<true, C> {
-    using type = C;
+template <bool b>
+struct dcall_impl;
+template <>
+struct dcall_impl<true> {
+    template <typename C>
+    using f = C;
 };
 
 template <typename C, std::size_t N>
-using dcall = typename dependant_impl<(N < 100'000), C>::type;
+using dcall = typename dcall_impl<(N >= 0)>::template f<C>;
 
 // continuation traits
 template <typename C>
@@ -89,7 +90,7 @@ struct calln_impl {
 template <continues_pack C>
 struct calln_impl<C> {
     template <typename... Ts>
-    using fn = C::template fn<deferred, Ts...>;
+    using fn = dcall<C, sizeof...(Ts)>::template fn<deferred, Ts...>;
 };
 
 template <terminates_pack C>
@@ -268,7 +269,7 @@ struct call1_impl<composition<F, Fs...>> {
 template <continues_pack F, typename... Fs>
 struct calln_impl<composition<F, Fs...>> {
     template <typename... Ts>
-    using fn = F::template fn<compose_next<Fs...>, Ts...>;
+    using fn = dcall<F, sizeof...(Ts)>::template fn<compose_next<Fs...>, Ts...>;
 };
 template <terminates_pack F, typename... Fs>
 struct calln_impl<composition<F, Fs...>> {

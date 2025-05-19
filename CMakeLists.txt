@@ -13,4 +13,5 @@ add_executable(ctlox
         parser_ct.h
         scanner_ct.h
         string_ct.h
-        types.h)
+        types.h
+        interpreter.h)
