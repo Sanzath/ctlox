@@ -83,6 +83,9 @@ struct expression_stmt { };
 template <typename Expr>
 struct print_stmt { };
 
+template <typename... Statements>
+struct block_stmt { };
+
 template <auto _literal>
 struct literal_expr { };
 

@@ -193,14 +193,20 @@ struct deferred {
 
 // composing continuations
 template <typename... Fs>
-struct composition final { };
+struct composition final {
+    // template <typename... F>
+};
 
 template <typename F, typename... Fs>
 struct cont_traits<composition<F, Fs...>> : cont_traits<F> { };
 
 // building compositions: they must be flat
+// TODO: fix compositions (do they need to be flat?)
 struct compose_impl {
 private:
+    // TODO: add f_append and use that in a bunch of places
+    // where compose<> is used
+
     template <bool _singular>
     struct recompose {
         template <typename... Fs>
@@ -299,6 +305,13 @@ struct to_list {
 
     template <accepts_one C, typename... Ts>
     using fn = call1<C, list<Ts...>>;
+};
+
+template <template <typename...> typename L>
+struct applied {
+    using has_fn = void;
+    template <accepts_one C, typename... Ts>
+    using fn = call1<C, L<Ts...>>;
 };
 
 struct from_list {
@@ -402,6 +415,34 @@ public:
     template <accepts_pack C, typename... Ts>
         requires(I < sizeof...(Ts))
     using fn = impl<0, Ts...>::template f<C>;
+};
+
+template <typename T>
+struct append {
+    using has_fn = void;
+    template <accepts_pack C, typename... Ts>
+    using fn = calln<C, Ts..., T>;
+};
+
+template <typename T>
+struct prepend {
+    using has_fn = void;
+    template <accepts_pack C, typename... Ts>
+    using fn = calln<C, T, Ts...>;
+};
+
+template <std::size_t I>
+struct rotate {
+    using has_fn = void;
+    template <accepts_pack C, typename T, typename... Ts>
+    using fn = dcall<rotate<I - 1>, sizeof...(Ts)>::template fn<C, Ts..., T>;
+};
+
+template <>
+struct rotate<0> {
+    using has_fn = void;
+    template <accepts_pack C, typename... Ts>
+    using fn = calln<C, Ts...>;
 };
 
 // disambiguation: as_one and as_pack may be used as the first item
@@ -566,5 +607,9 @@ namespace tests {
         returned>;
 
     using my_t = call<my_comp_2, char>;
+
+    static_assert(std::is_same_v<
+        run<given_pack<char, char, char, int, int>, rotate<3>, listed>,
+        list<int, int, char, char, char>>);
 }
 }

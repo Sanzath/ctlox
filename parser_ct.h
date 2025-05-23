@@ -277,17 +277,70 @@ private:
         using fn = impl<(Token::type == token_type::semicolon)>::template f<C, Expr, Token, Ts...>;
     };
 
+    struct consume_declaration;
+
     template <template <typename...> typename Stmt, typename... Args>
-    struct add_statement {
+    struct to_statement {
         using has_fn = void;
         template <typename C, typename Expr, typename... Ts>
-        using fn = calln<C, Ts..., Stmt<Args..., Expr>>;
+        using fn = calln<C, Stmt<Args..., Expr>, Ts...>;
+    };
+
+    struct add_to_block {
+        struct add_impl {
+            template <typename BlockStmt>
+            struct impl {
+                static_assert(false, "logic error: not a block_stmt");
+            };
+
+            template <typename... Statements>
+            struct impl<block_stmt<Statements...>> {
+                template <typename C, typename Stmt, typename... Ts>
+                using f = calln<C, block_stmt<Statements..., Stmt>, Ts...>;
+            };
+
+            using has_fn = void;
+            template <accepts_pack C, typename BlockStmt, typename Stmt, typename... Ts>
+            using fn = impl<BlockStmt>::template f<C, Stmt, Ts...>;
+        };
+
+        using has_fn = void;
+        template <accepts_pack C, typename Stmt, typename... Ts>
+        using fn = calln<
+            compose<rotate<sizeof...(Ts)>, add_impl, rotate<1>, C>,
+            Stmt, Ts...>;
+    };
+
+    struct maybe_match_end_of_block {
+        template <bool is_right_brace = false>
+        struct impl {
+            template <typename C, typename... Ts>
+            using f = calln<
+                compose<consume_declaration, add_to_block, maybe_match_end_of_block, C>, Ts...>;
+        };
+
+        template <>
+        struct impl<true> {
+            template <typename C, typename RightBrace, typename... Ts>
+            using f = calln<
+                compose<rotate<sizeof...(Ts) - 1>, C>, Ts...>;
+        };
+        using has_fn = void;
+        template <accepts_pack C, typename Token, typename... Ts>
+        using fn = impl<(Token::type == token_type::right_brace)>::template f<C, Token, Ts...>;
+    };
+
+    struct consume_block {
+        using has_fn = void;
+        template <accepts_pack C, typename Token, typename... Ts>
+        using fn = maybe_match_end_of_block::fn<C, Token, Ts..., block_stmt<>>;
     };
 
     struct consume_statement {
         enum class strategy {
             expression,
             print,
+            block,
         };
 
         constexpr static strategy classify(token_type type)
@@ -295,6 +348,8 @@ private:
             switch (type) {
             case token_type::_print:
                 return strategy::print;
+            case token_type::left_brace:
+                return strategy::block;
             default:
                 return strategy::expression;
             }
@@ -309,7 +364,7 @@ private:
         struct impl<strategy::expression> {
             template <typename C, typename... Ts>
             using f = calln<
-                compose<consume_expression, match_semicolon, add_statement<expression_stmt>, C>,
+                compose<consume_expression, match_semicolon, to_statement<expression_stmt>, C>,
                 Ts...>;
         };
 
@@ -317,8 +372,14 @@ private:
         struct impl<strategy::print> {
             template <typename C, typename Token, typename... Ts>
             using f = calln<
-                compose<consume_expression, match_semicolon, add_statement<print_stmt>, C>,
+                compose<consume_expression, match_semicolon, to_statement<print_stmt>, C>,
                 Ts...>;
+        };
+
+        template <>
+        struct impl<strategy::block> {
+            template <typename C, typename Token, typename... Ts>
+            using f = calln<compose<consume_block, C>, Ts...>;
         };
 
         using has_fn = void;
@@ -354,7 +415,7 @@ private:
         struct impl<true> {
             template <typename C, typename Var, typename Identifier, typename... Ts>
             using f = calln<
-                compose<maybe_match_variable_init, match_semicolon, add_statement<var_stmt, Identifier>, C>,
+                compose<maybe_match_variable_init, match_semicolon, to_statement<var_stmt, Identifier>, C>,
                 Ts...>;
         };
 
@@ -399,7 +460,7 @@ private:
         template <bool is_eof>
         struct impl {
             template <typename C, typename... Ts>
-            using f = calln<compose<consume_declaration, consume_program, C>, Ts...>;
+            using f = calln<compose<consume_declaration, rotate<1>, consume_program, C>, Ts...>;
         };
 
         template <>
@@ -586,5 +647,18 @@ static_assert(test<
                         literal_expr<2.0>>>,
                 token_ct<34, token_type::plus, "+">,
                 literal_expr<2.0>>>>>);
-
+static_assert(test<
+    "var foo; { var bar = 1; foo = bar; } print foo;",
+    var_stmt<
+        token_ct<4, token_type::identifier, "foo">,
+        literal_expr<nil>>,
+    block_stmt<
+        var_stmt<
+            token_ct<15, token_type::identifier, "bar">,
+            literal_expr<1.0>>,
+        expression_stmt<
+            assign_expr<
+                token_ct<24, token_type::identifier, "foo">,
+                variable_expr<token_ct<30, token_type::identifier, "bar">>>>>,
+    print_stmt<variable_expr<token_ct<43, token_type::identifier, "foo">>>>);
 }

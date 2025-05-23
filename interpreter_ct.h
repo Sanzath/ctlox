@@ -4,110 +4,227 @@
 
 namespace ctlox {
 
-template <typename... Entries>
-struct environment_ct;
-
-struct environment_base {
-    // TODO: maybe reduce templates?
-    template <string_ct name, typename Value>
-    struct entry { };
-
-    template <string_ct name, typename Value, typename... Entries>
-    struct define_impl {
-        static_assert(false, "logic error: unhandled case");
+struct env {
+    template <string_ct _name, typename Value>
+    struct entry_t {
+        static constexpr inline auto name = _name;
+        using value = Value;
     };
 
-    template <string_ct name, typename Value>
-    struct define_impl<name, Value> {
-        // Not found
-        template <typename... Entries>
-        using f = environment_ct<Entries..., entry<name, Value>>;
+    using block_separator = entry_t<"\x1D"_ct, value_t<none>>;
+    using end_of_environment = entry_t<"\x1E"_ct, value_t<none>>;
+
+    template <typename... Entries>
+    struct env_t {
+        struct given_entries {
+            using has_f0 = void;
+            template <accepts_pack C>
+            using f0 = calln<C, Entries...>;
+        };
     };
 
-    template <string_ct name, typename Value, typename Entry, typename... Entries>
-    struct define_impl<name, Value, Entry, Entries...> {
-        // searching
-        template <typename... Entries2>
-        using f = define_impl<name, Value, Entries...>::template f<Entries2..., Entry>;
-    };
+    using new_env = env_t<end_of_environment>;
 
-    template <string_ct name, typename Value, typename OldValue, typename... Entries>
-    struct define_impl<name, Value, entry<name, OldValue>, Entries...> {
-        // found: replace value
-        template <typename... Entries2>
-        using f = environment_ct<Entries2..., entry<name, Value>, Entries...>;
-    };
-
-    // returns modified environment
-    template <string_ct name, typename Value, typename... Entries>
-    using define = define_impl<name, Value, Entries...>::template f<>;
-
-    template <string_ct name, typename Value, typename... Entries>
-    struct assign_impl {
-        static_assert(false, "logic error: unhandled case");
-    };
-
-    template <string_ct name, typename Value>
-    struct assign_impl<name, Value> {
-        // Not found
-        static_assert(false, "Undefined variable.");
-    };
-
-    template <string_ct name, typename Value, typename Entry, typename... Entries>
-    struct assign_impl<name, Value, Entry, Entries...> {
-        // searching
-        template <typename... Entries2>
-        using f = assign_impl<name, Value, Entries...>::template f<Entries2..., Entry>;
-    };
-
-    template <string_ct name, typename Value, typename OldValue, typename... Entries>
-    struct assign_impl<name, Value, entry<name, OldValue>, Entries...> {
-        // found: replace value
-        template <typename... Entries2>
-        using f = environment_ct<Entries2..., entry<name, Value>, Entries...>;
-    };
-
-    // returns modified environment, errors if name not found
-    template <string_ct name, typename Value, typename... Entries>
-    using assign = assign_impl<name, Value, Entries...>::template f<>;
-
-    template <string_ct name, typename... Entries>
+    // get_impl: drop until name is found
+    // error if not found
     struct get_impl {
-        static_assert(false, "logic error: unhandled case");
+        enum class strategy {
+            found,
+            search,
+            not_found,
+        };
+
+        static constexpr inline strategy classify(auto searched_name, auto entry_name)
+        {
+            if (entry_name == end_of_environment::name)
+                return strategy::not_found;
+            return (entry_name == searched_name) ? strategy::found : strategy::search;
+        }
+
+        template <strategy s = strategy::not_found>
+        struct impl {
+            template <string_ct>
+            struct error_undefined_variable_ { };
+            template <typename C, typename Name, typename...>
+            using f = call1<errored, error_undefined_variable_<Name::value>>;
+        };
+
+        template <>
+        struct impl<strategy::found> {
+            template <typename C, typename Name, typename Entry, typename... Entries>
+            using f = call1<C, typename Entry::value>;
+        };
+
+        template <>
+        struct impl<strategy::search> {
+            template <typename C, typename Name, typename Entry, typename Next, typename... Entries>
+            using f = impl<classify(Name::value, Next::name)>::template f<
+                C, Name, Next, Entries...>;
+        };
+
+        using has_fn = void;
+        template <accepts_one C, typename Name, typename Entry, typename... Entries>
+        using fn = impl<classify(Name::value, Entry::name)>::template f<
+            C, Name, Entry, Entries...>;
     };
 
-    template <string_ct name>
-    struct get_impl<name> {
-        static_assert(false, "not found");
+    // declare_impl:
+    // - rotate until:
+    //   - block_separator: add value
+    //   - name found: update value
+    // - then rotate back
+    struct declare_impl {
+        enum class strategy {
+            found,
+            search,
+            not_found,
+        };
+
+        static constexpr inline strategy classify(auto new_entry_name, auto entry_name)
+        {
+            if (entry_name == end_of_environment::name || entry_name == block_separator::name)
+                return strategy::not_found;
+            return (entry_name == new_entry_name) ? strategy::found : strategy::search;
+        }
+
+        template <strategy s = strategy::not_found>
+        struct impl {
+            // declare new entry
+            template <
+                typename C, std::size_t _index, typename NewEntry,
+                typename Entry, typename... Entries>
+            using f = calln<
+                compose<rotate<(sizeof...(Entries) + 2 - _index) % (sizeof...(Entries) + 2)>, applied<env_t>, C>,
+                NewEntry, Entry, Entries...>;
+        };
+
+        template <>
+        struct impl<strategy::found> {
+            // replace existing entry
+            template <
+                typename C, std::size_t _index, typename NewEntry,
+                typename Entry, typename... Entries>
+            using f = calln<
+                compose<rotate<(sizeof...(Entries) + 1 - _index) % (sizeof...(Entries) + 1)>, applied<env_t>, C>,
+                NewEntry, Entries...>;
+        };
+
+        template <>
+        struct impl<strategy::search> {
+            template <
+                typename C, std::size_t _index, typename NewEntry,
+                typename Entry, typename Next, typename... Entries>
+            using f = impl<classify(NewEntry::name, Next::name)>::template f<
+                C, _index + 1, NewEntry, Next, Entries..., Entry>;
+        };
+
+        using has_fn = void;
+        template <accepts_one C, typename NewEntry, typename Entry, typename... Entries>
+        using fn = impl<classify(NewEntry::name, Entry::name)>::template f<
+            C, 0, NewEntry, Entry, Entries...>;
     };
 
-    template <string_ct name, typename Entry, typename... Entries>
-    struct get_impl<name, Entry, Entries...> {
-        // searching
-        using f = get_impl<name, Entries...>::f;
+    // assign_impl: rotate until name found, update value, then rotate back
+    // error if not found
+    struct assign_impl {
+        enum class strategy {
+            found,
+            search,
+            not_found,
+        };
+
+        static constexpr inline strategy classify(auto new_entry_name, auto entry_name)
+        {
+            if (entry_name == end_of_environment::name)
+                return strategy::not_found;
+            return (entry_name == new_entry_name) ? strategy::found : strategy::search;
+        }
+
+        template <strategy s = strategy::not_found>
+        struct impl {
+            static_assert(false, "Undefined variable");
+        };
+
+        template <>
+        struct impl<strategy::found> {
+            template <
+                typename C, std::size_t _index, typename NewEntry,
+                typename Entry, typename... Entries>
+            using f = calln<
+                compose<rotate<(sizeof...(Entries) + 1 - _index) % (sizeof...(Entries) + 1)>, applied<env_t>, C>,
+                NewEntry, Entries...>;
+        };
+
+        template <>
+        struct impl<strategy::search> {
+            template <
+                typename C, std::size_t _index, typename NewEntry,
+                typename Entry, typename Next, typename... Entries>
+            using f = impl<classify(NewEntry::name, Next::name)>::template f<
+                C, _index + 1, NewEntry, Next, Entries..., Entry>;
+        };
+
+        using has_fn = void;
+        template <accepts_one C, typename NewEntry, typename Entry, typename... Entries>
+        using fn = impl<classify(NewEntry::name, Entry::name)>::template f<
+            C, 0, NewEntry, Entry, Entries...>;
     };
 
-    template <string_ct name, typename Value, typename... Entries>
-    struct get_impl<name, entry<name, Value>, Entries...> {
-        // found: return value
-        using f = Value;
+    using push_scope_impl = prepend<block_separator>;
+
+    struct pop_scope_impl {
+        template <bool is_block_separator = false>
+        struct impl {
+            template <typename C, typename Entry, typename... Entries>
+            using f = impl<std::is_same_v<Entry, block_separator>>::template f<C, Entries...>;
+        };
+
+        template <>
+        struct impl<true> {
+            template <typename C, typename... Entries>
+            using f = calln<C, Entries...>;
+        };
+
+        using has_fn = void;
+        template <accepts_pack C, typename Entry, typename... Entries>
+        using fn = impl<std::is_same_v<Entry, block_separator>>::template f<C, Entries...>;
     };
 
-    // returns the entry, error if not found
-    template <string_ct name, typename... Entries>
-    using get = get_impl<name, Entries...>::f;
-};
+    template <typename Environment, string_ct _name>
+    using get = run<
+        typename Environment::given_entries,
+        prepend<value_t<_name>>,
+        get_impl,
+        returned>;
 
-template <typename... Entries>
-struct environment_ct : private environment_base {
-    template <string_ct name, typename Value>
-    using define = environment_base::define<name, Value, Entries...>;
+    template <typename Environment, string_ct _name, typename Value>
+    using declare = run<
+        typename Environment::given_entries,
+        prepend<entry_t<_name, Value>>,
+        declare_impl,
+        returned>;
 
-    template <string_ct name, typename Value>
-    using assign = environment_base::assign<name, Value, Entries...>;
+    template <typename Environment, string_ct _name, typename Value>
+    using assign = run<
+        typename Environment::given_entries,
+        prepend<entry_t<_name, Value>>,
+        assign_impl,
+        returned>;
 
-    template <string_ct name>
-    using get = environment_base::get<name, Entries...>;
+    // TODO: implement chapter 8.5
+    template <typename Environment>
+    using push_scope = run<
+        typename Environment::given_entries,
+        push_scope_impl,
+        applied<env_t>,
+        returned>;
+
+    template <typename Environment>
+    using pop_scope = run<
+        typename Environment::given_entries,
+        pop_scope_impl,
+        applied<env_t>,
+        returned>;
 };
 
 struct interpret_ct {
@@ -253,7 +370,7 @@ private:
     struct apply_assign_op {
         using has_fn = void;
         template <typename C, typename Environment, typename Value, typename... Ts>
-        using fn = calln<C, typename Environment::template assign<Name::lexeme, Value>, Value, Ts...>;
+        using fn = calln<C, env::assign<Environment, Name::lexeme, Value>, Value, Ts...>;
     };
 
     struct evaluate {
@@ -271,7 +388,7 @@ private:
         template <typename Name>
         struct impl<variable_expr<Name>> {
             template <typename C, typename Environment, typename... Ts>
-            using f = calln<C, Environment, typename Environment::template get<Name::lexeme>, Ts...>;
+            using f = calln<C, Environment, env::get<Environment, Name::lexeme>, Ts...>;
         };
 
         template <typename Name, typename ValueExpr>
@@ -313,7 +430,23 @@ private:
     struct bind_variable {
         using has_fn = void;
         template <typename C, typename Environment, typename Value, typename... Ts>
-        using fn = calln<C, typename Environment::template define<name, Value>, Ts...>;
+        using fn = calln<C, env::declare<Environment, name, Value>, Ts...>;
+    };
+
+    struct execute;
+
+    template <std::size_t block_size>
+    struct execute_block {
+        using has_fn = void;
+        template <accepts_pack C, typename Environment, typename... Ts>
+        using fn = calln<compose<execute, execute_block<block_size - 1>, C>, Environment, Ts...>;
+    };
+
+    template <>
+    struct execute_block<0> {
+        using has_fn = void;
+        template <accepts_pack C, typename Environment, typename... Ts>
+        using fn = calln<C, env::pop_scope<Environment>, Ts...>;
     };
 
     struct execute {
@@ -341,6 +474,14 @@ private:
         struct impl<var_stmt<Name, Initialiser>> {
             template <typename C, typename Environment, typename... Ts>
             using f = calln<compose<evaluate, bind_variable<Name::lexeme>, C>, Environment, Initialiser, Ts...>;
+        };
+
+        template <typename... Statements>
+        struct impl<block_stmt<Statements...>> {
+            template <typename C, typename Environment, typename... Ts>
+            using f = calln<
+                compose<execute_block<sizeof...(Statements)>, C>,
+                env::push_scope<Environment>, Statements..., Ts...>;
         };
 
         using has_fn = void;
@@ -372,7 +513,7 @@ public:
     template <accepts_pack C, typename... Statements>
     using fn = calln<
         compose<interpret, C>,
-        environment_ct<>, Statements..., end_of_program>;
+        env::new_env, Statements..., end_of_program>;
 };
 }
 
@@ -380,6 +521,26 @@ public:
 #include "scanner_ct.h"
 
 namespace ctlox::interpreter_tests {
+// TODO: comprehensive env tests
+static_assert(std::is_same_v<
+    env::declare<
+        env::env_t<
+            env::entry_t<"foo", value_t<nil>>,
+            env::entry_t<"bar", value_t<nil>>,
+            env::entry_t<"baz", value_t<nil>>,
+            env::entry_t<"quz", value_t<nil>>,
+            env::entry_t<"quux", value_t<nil>>,
+            env::end_of_environment>,
+        "zaber", value_t<7.0>>,
+    env::env_t<
+        env::entry_t<"foo", value_t<nil>>,
+        env::entry_t<"bar", value_t<nil>>,
+        env::entry_t<"baz", value_t<nil>>,
+        env::entry_t<"quz", value_t<nil>>,
+        env::entry_t<"quux", value_t<nil>>,
+        env::entry_t<"zaber", value_t<7.0>>,
+        env::end_of_environment>>);
+
 template <string_ct s, auto _expected>
 constexpr bool test()
 {
@@ -410,4 +571,5 @@ constexpr bool r5 = test<R"(print 4 < 3;)", false>();
 constexpr bool r6 = test<"print 5 * 100 / 22;", 5.0 * 100.0 / 22.0>();
 constexpr bool r7 = test<"print 5 * (100 / 22);", 5.0 * (100.0 / 22.0)>();
 constexpr bool r8 = test<"var foo; var bar; foo = (bar = 2) + 5; print foo;", 7.0>();
+constexpr bool r9 = test<"var foo; { var bar = 1; foo = bar; } print foo;", 1.0>();
 }

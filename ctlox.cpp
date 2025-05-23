@@ -75,22 +75,59 @@ using lox = compose<
     detect_errors,
     parse_ct,
     interpret_ct>;
+
+template <string_ct s>
+using compile = compose<
+    scan_ct<s>,
+    detect_errors,
+    parse_ct>;
 }
 
 int main()
 {
-    using output = ctlox::run<
-        ctlox::lox<R"(
-            var foo = 10;
-            print foo + 15.5;
-            var foo;
-            print foo;)">,
-        ctlox::listed>;
+    using program = ctlox::run<
+        ctlox::compile<R"(
+var a = 1;
+var b = 2;
+var c = 3;
+
+{
+var a = 4;
+var b = 5;
+
+{
+var a = 6;
+
+print a;
+print b;
+print c;
+}
+
+print a;
+print b;
+print c;
+}
+
+print a;
+print b;
+print c;
+)">>;
+
+    using output = ctlox::run<program, ctlox::interpret_ct>;
 
     using namespace ctlox::literals;
     static_assert(std::is_same_v<
         output,
         ctlox::list<
-            ctlox::value_t<25.5>,
-            ctlox::value_t<ctlox::nil>>>);
+            ctlox::value_t<6.0>,
+            ctlox::value_t<5.0>,
+            ctlox::value_t<3.0>,
+
+            ctlox::value_t<4.0>,
+            ctlox::value_t<5.0>,
+            ctlox::value_t<3.0>,
+
+            ctlox::value_t<1.0>,
+            ctlox::value_t<2.0>,
+            ctlox::value_t<3.0>>>);
 }
