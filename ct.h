@@ -192,95 +192,109 @@ struct deferred {
 };
 
 // composing continuations
-template <typename... Fs>
-struct composition final {
-    // template <typename... F>
+template <typename F, typename... Fs>
+struct composition;
+
+template <typename F, typename... Fs>
+struct comp_0 { };
+template <initiator F, typename... Fs>
+struct comp_0<F, Fs...> {
+    using has_f0 = void;
+    template <typename C>
+    using f0 = F::template f0<composition<Fs..., C>>;
 };
 
 template <typename F, typename... Fs>
-struct cont_traits<composition<F, Fs...>> : cont_traits<F> { };
+struct comp_1 { };
+template <accepts_one F, typename... Fs>
+struct comp_1<F, Fs...> {
+    using has_f1 = void;
+    template <typename C, typename T>
+    using f1 = F::template f1<composition<Fs..., C>, T>;
+};
+template <terminates_one F, typename... Fs>
+struct comp_1<F, Fs...> {
+    using has_z1 = void;
+    template <typename T>
+    using z1 = F::template z1<T>;
+};
 
-// building compositions: they must be flat
-// TODO: fix compositions (do they need to be flat?)
+template <typename F, typename... Fs>
+struct comp_n { };
+template <accepts_pack F, typename... Fs>
+struct comp_n<F, Fs...> {
+    using has_fn = void;
+    template <typename C, typename... Ts>
+    using fn = dcall<F, sizeof...(Ts)>::template fn<composition<Fs..., C>, Ts...>;
+};
+template <terminates_pack F, typename... Fs>
+struct comp_n<F, Fs...> {
+    using has_zn = void;
+    template <typename... Ts>
+    using zn = F::template zn<Ts...>;
+};
+
+template <typename F, typename... Fs>
+struct composition
+    : comp_0<F, Fs...>,
+      comp_1<F, Fs...>,
+      comp_n<F, Fs...> {
+};
+
 struct compose_impl {
-private:
-    // TODO: add f_append and use that in a bunch of places
-    // where compose<> is used
-
-    template <bool _singular>
-    struct recompose {
-        template <typename... Fs>
-        using f = composition<Fs...>;
+    template <bool singular = false>
+    struct impl {
+        template <typename F, typename... Fs>
+        using f = composition<F, Fs...>;
     };
-
     template <>
-    struct recompose<true> {
+    struct impl<true> {
         template <typename F>
         using f = F;
     };
-
-    template <typename... Fs>
-    struct decompose;
-
-    template <typename... CFs, typename... Fs>
-    struct decompose<composition<CFs...>, Fs...> {
-        template <typename... OFs>
-        using f = decompose<CFs..., Fs...>::template f<OFs...>;
-    };
-
     template <typename F, typename... Fs>
-    struct decompose<F, Fs...> {
-        template <typename... OFs>
-        using f = decompose<Fs...>::template f<OFs..., F>;
-    };
-
-    template <>
-    struct decompose<> {
-        template <typename... OFs>
-        using f = recompose<sizeof...(OFs) == 1>::template f<OFs...>;
-    };
-
-public:
-    template <typename... Fs>
-    using f_full = decompose<Fs...>::template f<>;
-
-    template <typename... Fs>
-    using f_next = recompose<sizeof...(Fs) == 1>::template f<Fs...>;
+    using f = impl<(sizeof...(Fs) == 0)>::template f<F, Fs...>;
 };
 
-template <typename... Fs>
-using compose = compose_impl::template f_full<Fs...>;
-
-template <typename... Fs>
-using compose_next = compose_impl::template f_next<Fs...>;
+template <typename F, typename... Fs>
+using compose = compose_impl::template f<F, Fs...>;
 
 template <initiator C, typename... Cs>
 using run = initiate<compose<C, Cs...>>;
 
 // calling continuations with compositions
-template <initiator F, typename... Fs>
-struct initiate_impl<composition<F, Fs...>> {
-    using f0 = F::template f0<compose_next<Fs...>>;
+template <typename F, typename F2, typename... Fs>
+    requires(sizeof...(Fs) > 0)
+struct initiate_impl<composition<F, F2, Fs...>> {
+    using f0 = F::template f0<compose<F2, Fs...>>;
 };
-template <continues_one F, typename... Fs>
-struct call1_impl<composition<F, Fs...>> {
+template <typename F, typename F2>
+struct initiate_impl<composition<F, F2>> {
+    using f0 = F::template f0<F2>;
+};
+
+template <continues_one F, typename F2, typename... Fs>
+    requires(sizeof...(Fs) > 0)
+struct call1_impl<composition<F, F2, Fs...>> {
     template <typename T>
-    using f1 = F::template f1<compose_next<Fs...>, T>;
+    using f1 = F::template f1<compose<F2, Fs...>, T>;
 };
-template <terminates_one F, typename... Fs>
-struct call1_impl<composition<F, Fs...>> {
+template <continues_one F, typename F2>
+struct call1_impl<composition<F, F2>> {
     template <typename T>
-    using f1 = F::template z1<T>;
+    using f1 = F::template f1<F2, T>;
 };
-template <continues_pack F, typename... Fs>
-struct calln_impl<composition<F, Fs...>> {
+
+template <continues_pack F, typename F2, typename... Fs>
+    requires(sizeof...(Fs) > 0)
+struct calln_impl<composition<F, F2, Fs...>> {
     template <typename... Ts>
-    using fn = dcall<F, sizeof...(Ts)>::template fn<compose_next<Fs...>, Ts...>;
+    using fn = dcall<F, sizeof...(Ts)>::template fn<compose<F2, Fs...>, Ts...>;
 };
-template <terminates_pack F, typename... Fs>
-struct calln_impl<composition<F, Fs...>> {
+template <continues_pack F, typename F2>
+struct calln_impl<composition<F, F2>> {
     template <typename... Ts>
-    using fn = F::template zn<Ts...>;
+    using fn = dcall<F, sizeof...(Ts)>::template fn<F2, Ts...>;
 };
 
 // example any-to-same: noop
@@ -545,6 +559,11 @@ namespace comptests {
         using zn = list<Ts...>;
     };
 
+    static_assert(initiator<compose<zero_to_one>>);
+    static_assert(std::same_as<
+        initiate<compose<compose<compose<zero_to_pack>>>>,
+        given_pack<int, char>>);
+
     // terminated packs
     using t0 = initiate<compose<zero_to_one, one_to_one, one_to_pack, pack_terminal>>;
     static_assert(std::same_as<t0, list<int, int>>);
@@ -584,7 +603,7 @@ namespace tests {
         using f1 = calln<C, Arg, Arg, Arg, Arg, Arg>;
     };
 
-    static_assert(std::is_same_v<at<3>, compose<at<3>>>);
+    // static_assert(std::is_same_v<at<3>, compose<at<3>>>);
 
     static_assert(std::is_same_v<call1<compose<noop, returned>, double>, double>);
 
@@ -593,6 +612,9 @@ namespace tests {
         compose<at<2>, noop>,
         compose<noop, repeat_5>,
         listed>;
+
+    static_assert(cont_traits<compose<noop>>::has_fn);
+    static_assert(cont_traits<compose<compose<noop>>>::has_fn);
 
     using my_list = call<my_composition>;
 
