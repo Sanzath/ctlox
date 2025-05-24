@@ -27,7 +27,3 @@ using compile_and_execute = run<
     interpret_ct,
     listed>;
 }
-
-namespace ctlox {
-using namespace v1;
-}

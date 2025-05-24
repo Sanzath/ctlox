@@ -1,6 +1,6 @@
 #include <ctlox/v1/ctlox.hpp>
 
-namespace ctlox_main {
+namespace ctlox_main::v1 {
 
 // Changing line 23 to `a = a / 2 + 1` causes this program to fail to compile.
 using output = ctlox::v1::compile_and_execute<R"(
