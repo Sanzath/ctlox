@@ -2,7 +2,7 @@
 #include <ctlox/v1/parser.hpp>
 
 
-namespace test_parser {
+namespace test_v1::test_parser {
 using namespace ctlox::common;
 using namespace ctlox::v1;
 

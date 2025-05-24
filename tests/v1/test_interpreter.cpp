@@ -3,7 +3,7 @@
 #include <ctlox/v1/parser.hpp>
 #include <ctlox/v1/scanner.hpp>
 
-namespace test_interpreter {
+namespace test_v1::test_interpreter {
 using namespace ctlox::common;
 using namespace ctlox::v1;
 

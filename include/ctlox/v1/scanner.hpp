@@ -1,7 +1,8 @@
 #pragma once
 
-#include <ctlox/common/string.hpp>
+#include <ctlox/common/characters.hpp>
 #include <ctlox/common/numbers.hpp>
+#include <ctlox/common/string.hpp>
 #include <ctlox/v1/ct.hpp>
 #include <ctlox/v1/types.hpp>
 
@@ -10,22 +11,6 @@ namespace ctlox::v1 {
 struct base_scanner_ct {
 protected:
     // Eveything that doesn't depend on scanner_ct's template argument goes here
-
-    static constexpr inline bool is_alpha(char c)
-    {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-    }
-
-    static constexpr inline bool is_digit(char c)
-    {
-        return c >= '0' && c <= '9';
-    }
-
-    static constexpr inline bool is_alphanumeric(char c)
-    {
-        return is_alpha(c) || is_digit(c);
-    }
-
     enum class char_class {
         single,
         single_maybe_equal,
@@ -38,8 +23,7 @@ protected:
         unknown,
     };
 
-    static constexpr inline char_class classify_char(char c)
-    {
+    static constexpr inline char_class classify_char(char c) {
         switch (c) {
         case '(':
         case ')':
@@ -79,8 +63,7 @@ protected:
         }
     }
 
-    static constexpr inline token_type identify_single(char c)
-    {
+    static constexpr inline token_type identify_single(char c) {
         switch (c) {
         case '(':
             return token_type::left_paren;
@@ -117,8 +100,7 @@ protected:
         }
     }
 
-    static constexpr inline token_type identify_single_equal(char c)
-    {
+    static constexpr inline token_type identify_single_equal(char c) {
         switch (c) {
         case '!':
             return token_type::bang_equal;
@@ -131,34 +113,6 @@ protected:
         default:
             return token_type::eof;
         }
-    }
-
-    static constexpr inline token_type identify_keyword(std::string_view s)
-    {
-        constexpr auto keywords = std::to_array<std::pair<std::string_view, token_type>>({
-            { "and", token_type::_and },
-            { "class", token_type::_class },
-            { "else", token_type::_else },
-            { "false", token_type::_false },
-            { "for", token_type::_for },
-            { "fun", token_type::_fun },
-            { "if", token_type::_if },
-            { "nil", token_type::_nil },
-            { "or", token_type::_or },
-            { "print", token_type::_print },
-            { "return", token_type::_return },
-            { "super", token_type::_super },
-            { "this", token_type::_this },
-            { "true", token_type::_true },
-            { "var", token_type::_var },
-            { "while", token_type::_while },
-        });
-
-        const auto it = std::ranges::find(keywords, s, [](const auto& p) { return p.first; });
-        if (it != keywords.end()) {
-            return it->second;
-        }
-        return token_type::identifier;
     }
 
     template <token_type type>
@@ -174,23 +128,19 @@ protected:
 template <string s>
 struct scan_ct : private base_scanner_ct {
 private:
-    static constexpr inline bool at_end(std::size_t location)
-    {
+    static constexpr inline bool at_end(std::size_t location) {
         return location >= s.size();
     }
 
-    static constexpr inline char at(std::size_t location)
-    {
+    static constexpr inline char at(std::size_t location) {
         return at_end(location) ? '\0' : s[location];
     }
 
-    static constexpr inline char_class classify_at(std::size_t location)
-    {
+    static constexpr inline char_class classify_at(std::size_t location) {
         return classify_char(at(location));
     }
 
-    static constexpr inline std::size_t find_end_of_number(std::size_t location)
-    {
+    static constexpr inline std::size_t find_end_of_number(std::size_t location) {
         while (is_digit(at(location)))
             ++location;
         if (at(location) == '.' && is_digit(at(location + 1))) {
@@ -202,8 +152,7 @@ private:
         return location;
     }
 
-    static constexpr inline std::size_t find_end_of_identifier(std::size_t location)
-    {
+    static constexpr inline std::size_t find_end_of_identifier(std::size_t location) {
         while (is_alphanumeric(at(location)))
             ++location;
         return location;

@@ -1,7 +1,7 @@
 #include <ctlox/v1/ct.hpp>
 #include <string>
 
-namespace test_ct {
+namespace test_v1::test_ct {
 
 using namespace ctlox::v1;
 

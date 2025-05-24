@@ -1,5 +1,11 @@
 BasedOnStyle: WebKit
 
 Standard: c++20
+
 SpacesBeforeTrailingComments: 2
+
 FixNamespaceComments: true
+
+BreakConstructorInitializers: BeforeComma
+
+BreakBeforeBraces: Attach

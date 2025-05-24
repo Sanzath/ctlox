@@ -1,6 +1,6 @@
 #include <ctlox/v1/scanner.hpp>
 
-namespace test_scanner {
+namespace test_v1::test_scanner {
 using namespace ctlox::common;
 using namespace ctlox::v1;
 
