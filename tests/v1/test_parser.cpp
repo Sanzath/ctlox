@@ -1,9 +1,10 @@
 #include <ctlox/v1/scanner.hpp>
 #include <ctlox/v1/parser.hpp>
 
-using namespace ctlox::v1;
 
 namespace test_parser {
+using namespace ctlox::common;
+using namespace ctlox::v1;
 
 static_assert(none == none);
 static_assert(none != 154.0);

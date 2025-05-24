@@ -1,8 +1,9 @@
 #include <ctlox/v1/scanner.hpp>
 
+namespace test_scanner {
+using namespace ctlox::common;
 using namespace ctlox::v1;
 
-namespace test_scanner {
 using tokens_1 = run<
     scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)">,
     listed>;

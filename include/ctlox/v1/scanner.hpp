@@ -1,8 +1,8 @@
 #pragma once
 
+#include <ctlox/common/string.hpp>
+#include <ctlox/common/numbers.hpp>
 #include <ctlox/v1/ct.hpp>
-#include <ctlox/v1/numbers.hpp>
-#include <ctlox/v1/string.hpp>
 #include <ctlox/v1/types.hpp>
 
 namespace ctlox::v1 {
@@ -315,4 +315,4 @@ public:
     template <typename C>
     using f0 = scan_token_at<0>::template f<C>;
 };
-};
+};  // namespace ctlox::v1

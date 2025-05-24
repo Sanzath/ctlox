@@ -2,10 +2,8 @@
 
 #include <ctlox/v1/ct.hpp>
 #include <ctlox/v1/interpreter.hpp>
-#include <ctlox/v1/numbers.hpp>
 #include <ctlox/v1/parser.hpp>
 #include <ctlox/v1/scanner.hpp>
-#include <ctlox/v1/string.hpp>
 #include <ctlox/v1/types.hpp>
 
 namespace ctlox::v1 {

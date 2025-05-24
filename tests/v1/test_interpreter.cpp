@@ -4,7 +4,7 @@
 #include <ctlox/v1/scanner.hpp>
 
 namespace test_interpreter {
-
+using namespace ctlox::common;
 using namespace ctlox::v1;
 
 // TODO: comprehensive env tests

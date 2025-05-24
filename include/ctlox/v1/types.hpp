@@ -1,54 +1,9 @@
 #pragma once
 
-#include <ctlox/v1/string.hpp>
+#include <ctlox/common/string.hpp>
+#include <ctlox/common/token_type.hpp>
 
 namespace ctlox::v1 {
-enum class token_type {
-    left_paren,
-    right_paren,
-    left_brace,
-    right_brace,
-    comma,
-    dot,
-    minus,
-    plus,
-    semicolon,
-    slash,
-    star,
-
-    bang,
-    bang_equal,
-    equal,
-    equal_equal,
-    greater,
-    greater_equal,
-    less,
-    less_equal,
-
-    identifier,
-    string,
-    number,
-
-    _and,
-    _class,
-    _else,
-    _false,
-    _fun,
-    _for,
-    _if,
-    _nil,
-    _or,
-    _print,
-    _return,
-    _super,
-    _this,
-    _true,
-    _var,
-    _while,
-
-    eof,
-};
-
 struct none_t {
     constexpr bool operator==(const none_t&) const noexcept { return true; }
 
@@ -63,8 +18,8 @@ struct nil_t {
     constexpr bool operator==(const T&) const noexcept { return false; }
 };
 
-static constexpr inline none_t none; // not a literal
-static constexpr inline nil_t nil; // nil literal
+static constexpr inline none_t none;  // not a literal
+static constexpr inline nil_t nil;  // nil literal
 
 template <auto _value>
 struct value_t {
@@ -73,7 +28,7 @@ struct value_t {
     static constexpr inline value_type value = _value;
 
     constexpr value_type operator()() const noexcept { return value; }
-    constexpr explicit(false) operator value_type() const noexcept { return value; } // NOLINT(google-explicit-constructor)
+    constexpr explicit(false) operator value_type() const noexcept { return value; }  // NOLINT(google-explicit-constructor)
 };
 
 template <std::size_t _location, token_type _type, string _lexeme, auto _literal = none>
@@ -118,4 +73,4 @@ struct binary_expr { };
 template <typename Expr>
 struct grouping_expr { };
 
-}
+}  // namespace ctlox::v1

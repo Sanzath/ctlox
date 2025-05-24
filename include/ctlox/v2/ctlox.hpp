@@ -4,7 +4,3 @@
 
 namespace ctlox::v2 {
 }
-
-namespace ctlox {
-using namespace v2;
-}

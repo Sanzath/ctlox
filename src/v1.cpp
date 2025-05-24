@@ -1,4 +1,4 @@
-#include <ctlox/v1/ctlox.hpp>
+#include <ctlox/v1.hpp>
 
 namespace ctlox_main::v1 {
 
@@ -13,7 +13,7 @@ var a = 15;
 print a;
 )">;
 
-using namespace ctlox::v1::literals;
+using namespace ctlox::literals;
 static_assert(std::is_same_v<
     output,
     ctlox::v1::list<

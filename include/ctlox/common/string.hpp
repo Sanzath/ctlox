@@ -4,7 +4,7 @@
 #include <array>
 #include <string_view>
 
-namespace ctlox::v1 {
+namespace ctlox::inline common {
 template <std::size_t N>
 struct string {
     constexpr string() = default;
@@ -57,7 +57,7 @@ struct string {
 
     template <std::size_t M>
         requires(N != M)
-    constexpr auto operator==(const string<M>&) const
+    constexpr bool operator==(const string<M>&) const
     {
         return false;
     }
@@ -71,7 +71,7 @@ string(const char (&str)[N]) -> string<N - 1>;
 inline namespace literals {
     template <string s>
     constexpr auto operator""_ct() { return s; }
-}
+}  // namespace literals
 
 template <std::size_t... Ns>
 constexpr auto concat(string<Ns> const&... strings)
@@ -89,4 +89,4 @@ constexpr auto concat(string<Ns> const&... strings)
 
     return out_str;
 }
-}
+}  // namespace ctlox::inline common
