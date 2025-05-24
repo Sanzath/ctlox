@@ -95,12 +95,24 @@ namespace test_call {
     // using t9f = call<one_to_one, char, int>;
 }
 
-// example one-to-pack: repeat_5 (could be repeat<N>)
-struct repeat_5 {
-    using has_f1 = void;
+// example one-to-pack: repeat<N>
+template <std::size_t N>
+struct repeat {
+    template <std::size_t I, typename T>
+    struct impl {
+        template <typename C, typename... Ts>
+        using f = impl<I + 1, T>::template f<C, T, Ts...>;
+    };
 
-    template <accepts_pack C, typename Arg>
-    using f1 = calln<C, Arg, Arg, Arg, Arg, Arg>;
+    template <typename T>
+    struct impl<N, T> {
+        template <typename C, typename... Ts>
+        using f = calln<C, Ts...>;
+    };
+
+    using has_f1 = void;
+    template <accepts_pack C, typename T>
+    using f1 = impl<0, T>::template f<C>;
 };
 
 static_assert(std::is_same_v<call1<compose<noop, returned>, double>, double>);
@@ -108,7 +120,7 @@ static_assert(std::is_same_v<call1<compose<noop, returned>, double>, double>);
 using my_composition = compose<
     given_pack<int, double, std::string, std::size_t>,
     compose<at<2>, noop>,
-    compose<noop, repeat_5>,
+    compose<noop, repeat<5>>,
     listed>;
 
 static_assert(cont_traits<compose<noop>>::has_fn);
@@ -122,7 +134,7 @@ static_assert(std::is_same_v<
 
 using my_comp_2 = compose<
     as_one,
-    repeat_5,
+    repeat<5>,
     at<3>,
     returned>;
 
@@ -131,4 +143,8 @@ using my_t = call<my_comp_2, char>;
 static_assert(std::is_same_v<
     run<given_pack<char, char, char, int, int>, rotate<3>, listed>,
     list<int, int, char, char, char>>);
+
+using my_tuple_types = run<given_one<int>, repeat<2>, prepend<char>, append<double>>;
+using my_tuple = run<my_tuple_types, applied<std::tuple>, returned>;
+static_assert(std::is_same_v<my_tuple, std::tuple<char, int, int, double>>);
 }

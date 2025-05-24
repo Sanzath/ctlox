@@ -10,18 +10,18 @@
 
 namespace ctlox::v1 {
 template <string s>
-using compile = compose<
+using compile = run<
     scan_ct<s>,
     parse_ct>;
 
 template <typename Compiled>
-using execute = compose<
+using execute = run<
     Compiled,
     interpret_ct,
     listed>;
 
 template <string s>
-using compile_and_execute = compose<
+using compile_and_execute = run<
     scan_ct<s>,
     parse_ct,
     interpret_ct,
