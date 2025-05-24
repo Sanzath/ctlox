@@ -5,7 +5,6 @@ using namespace ctlox::v1;
 
 namespace test_parser {
 
-namespace ctlox::parse_tests {
 static_assert(none == none);
 static_assert(none != 154.0);
 
@@ -183,5 +182,4 @@ static_assert(test<
                 token_t<24, token_type::identifier, "foo">,
                 variable_expr<token_t<30, token_type::identifier, "bar">>>>>,
     print_stmt<variable_expr<token_t<43, token_type::identifier, "foo">>>>);
-}
 }
