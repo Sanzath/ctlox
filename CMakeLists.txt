@@ -6,12 +6,12 @@ set(CMAKE_CXX_STANDARD 23)
 include_directories(.)
 
 add_executable(ctlox
-        ct.h
+        include/ctlox/v1/ct.h
         ctlox.cpp
-        interpreter_ct.h
-        numbers.h
-        parser_ct.h
-        scanner_ct.h
-        string_ct.h
-        types.h
-        interpreter.h)
+        include/ctlox/v1/interpreter_ct.h
+        include/ctlox/v1/numbers.h
+        include/ctlox/v1/parser_ct.h
+        include/ctlox/v1/scanner_ct.h
+        include/ctlox/v1/string_ct.h
+        include/ctlox/v1/types.h
+)

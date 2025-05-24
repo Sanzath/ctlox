@@ -211,7 +211,6 @@ struct env {
         assign_impl,
         returned>;
 
-    // TODO: implement chapter 8.5
     template <typename Environment>
     using push_scope = run<
         typename Environment::given_entries,

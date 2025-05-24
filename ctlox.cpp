@@ -1,9 +1,9 @@
 #include <algorithm>
 
-#include "ct.h"
-#include "interpreter_ct.h"
-#include "parser_ct.h"
-#include "scanner_ct.h"
+#include "include/ctlox/v1/ct.h"
+#include "include/ctlox/v1/interpreter_ct.h"
+#include "include/ctlox/v1/parser_ct.h"
+#include "include/ctlox/v1/scanner_ct.h"
 
 namespace ctlox {
 struct detect_errors {

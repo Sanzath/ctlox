@@ -1,9 +1,9 @@
 #pragma once
 
+#include "../../../types.h"
 #include "ct.h"
 #include "numbers.h"
 #include "string_ct.h"
-#include "types.h"
 
 namespace ctlox {
 
