@@ -43,6 +43,7 @@ namespace ctlox::v1 {
         return text;
     }
 
+    // based on https://github.com/tcsullivan/constexpr-to-string/
     constexpr std::string print_double(double value) {
         auto whole = static_cast<std::int64_t>(value);
         value -= whole;
