@@ -4,19 +4,19 @@
 #include <array>
 #include <string_view>
 
-namespace ctlox {
+namespace ctlox::v1 {
 template <std::size_t N>
-struct string_ct {
-    constexpr string_ct() = default;
+struct string {
+    constexpr string() = default;
 
-    constexpr string_ct(const char (&str)[N + 1])
+    constexpr string(const char (&str)[N + 1])
     {
         if constexpr (N != 0) {
             std::ranges::copy_n(str, N, str_.begin());
         }
     }
 
-    constexpr string_ct(std::string_view str)
+    constexpr string(std::string_view str)
     {
         if constexpr (N != 0) {
             std::ranges::copy_n(str.begin(), N, str_.begin());
@@ -24,7 +24,7 @@ struct string_ct {
     }
 
     constexpr auto size() const { return N; };
-    constexpr bool empty() const { return N == 0; };
+    [[nodiscard]] constexpr bool empty() const { return N == 0; };
 
     constexpr auto begin() { return str_.begin(); };
     constexpr auto begin() const { return str_.begin(); };
@@ -39,25 +39,25 @@ struct string_ct {
     }
 
     template <std::size_t first, std::size_t last>
-    constexpr string_ct<last - first> substr() const
+    constexpr string<last - first> substr() const
     {
-        string_ct<last - first> other;
+        string<last - first> other;
         std::ranges::copy(str_.begin() + first, str_.begin() + last, other.begin());
         return other;
     }
 
-    constexpr std::size_t find_next(std::size_t start, char c) const
+    [[nodiscard]] constexpr std::size_t find_next(std::size_t start, char c) const
     {
         const auto iter = std::ranges::find(str_.begin() + start, str_.end(), c);
         return iter == str_.end() ? str_.size() : iter - str_.begin();
     }
 
-    constexpr auto operator<=>(const string_ct&) const = default;
-    constexpr bool operator==(const string_ct&) const = default;
+    constexpr auto operator<=>(const string&) const = default;
+    constexpr bool operator==(const string&) const = default;
 
     template <std::size_t M>
         requires(N != M)
-    constexpr auto operator==(const string_ct<M>&) const
+    constexpr auto operator==(const string<M>&) const
     {
         return false;
     }
@@ -66,18 +66,18 @@ struct string_ct {
 };
 
 template <std::size_t N>
-string_ct(const char (&str)[N]) -> string_ct<N - 1>;
+string(const char (&str)[N]) -> string<N - 1>;
 
 inline namespace literals {
-    template <string_ct s>
+    template <string s>
     constexpr auto operator""_ct() { return s; }
 }
 
 template <std::size_t... Ns>
-constexpr auto concat(string_ct<Ns> const&... strings)
+constexpr auto concat(string<Ns> const&... strings)
 {
     constexpr std::size_t N = (Ns + ...);
-    string_ct<N> out_str;
+    string<N> out_str;
     auto out_it = out_str.begin();
 
     auto do_copy = [&](const auto& str) {

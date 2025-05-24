@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm>
 
-namespace ctlox {
+namespace ctlox::v1 {
     constexpr double parse_double(std::string_view text) {
         auto dot = text.find('.');
         auto decimal_part = text.substr(0, dot);

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../../../types.h"
-#include "ct.h"
-#include "numbers.h"
-#include "string_ct.h"
+#include <ctlox/v1/ct.hpp>
+#include <ctlox/v1/numbers.hpp>
+#include <ctlox/v1/string.hpp>
+#include <ctlox/v1/types.hpp>
 
-namespace ctlox {
+namespace ctlox::v1 {
 
 struct base_scanner_ct {
 protected:
@@ -161,15 +161,6 @@ protected:
         return token_type::identifier;
     }
 
-    // error "strings" (will be displayed more or less properly with errored
-    template <std::size_t _location>
-    struct _at_location_ {
-        template <char c>
-        struct _unexpected_character_ { };
-
-        struct _unterminated_string_ { };
-    };
-
     template <token_type type>
     static constexpr inline auto keyword_literal = none;
     template <>
@@ -180,7 +171,7 @@ protected:
     constexpr auto keyword_literal<token_type::_nil> = nil;
 };
 
-template <string_ct s>
+template <string s>
 struct scan_ct : private base_scanner_ct {
 private:
     static constexpr inline bool at_end(std::size_t location)
@@ -220,11 +211,7 @@ private:
 
     template <std::size_t _location, char_class _class = classify_at(_location)>
     struct scan_token_at {
-        // catch-all: unknown character
-        template <typename C, typename... Tokens>
-        using f = scan_token_at<_location + 1>::template f<
-            C, Tokens...,
-            error_t<typename _at_location_<_location>::template _unexpected_character_<at(_location)>>>;
+        static_assert(false, "Unknown character");
     };
 
     template <std::size_t _location>
@@ -232,7 +219,7 @@ private:
         template <typename C, typename... Tokens>
         using f = calln<
             C, Tokens...,
-            token_ct<_location, token_type::eof, "">>;
+            token_t<_location, token_type::eof, "">>;
     };
 
     template <std::size_t _location>
@@ -246,7 +233,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<_location + 1>::template f<
             C, Tokens...,
-            token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
+            token_t<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
     };
 
     template <std::size_t _location>
@@ -254,7 +241,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<_location + 1>::template f<
             C, Tokens...,
-            token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
+            token_t<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
     };
 
     template <std::size_t _location>
@@ -263,7 +250,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<_location + 2>::template f<
             C, Tokens...,
-            token_ct<_location, identify_single_equal(at(_location)), s.template substr<_location, _location + 2>()>>;
+            token_t<_location, identify_single_equal(at(_location)), s.template substr<_location, _location + 2>()>>;
     };
 
     template <std::size_t _location>
@@ -271,7 +258,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<_location + 1>::template f<
             C, Tokens...,
-            token_ct<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
+            token_t<_location, identify_single(at(_location)), s.template substr<_location, _location + 1>()>>;
     };
 
     template <std::size_t _location>
@@ -290,16 +277,13 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<s.find_next(_location + 1, '"') + 1>::template f<
             C, Tokens...,
-            token_ct<_location, token_type::string, lexeme, str>>;
+            token_t<_location, token_type::string, lexeme, str>>;
     };
 
     template <std::size_t _location>
         requires(at_end(s.find_next(_location + 1, '"')))
     struct scan_token_at<_location, char_class::string> {
-        template <typename C, typename... Tokens>
-        using f = scan_token_at<s.find_next(_location + 1, '"') + 1>::template f<
-            C, Tokens...,
-            error_t<typename _at_location_<_location>::_unterminated_string_>>;
+        static_assert(false, "Unterminated string");
     };
 
     template <std::size_t _location>
@@ -310,7 +294,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<end>::template f<
             C, Tokens...,
-            token_ct<_location, token_type::number, lexeme, parse_double(lexeme)>>;
+            token_t<_location, token_type::number, lexeme, parse_double(lexeme)>>;
     };
 
     template <std::size_t _location>
@@ -322,7 +306,7 @@ private:
         template <typename C, typename... Tokens>
         using f = scan_token_at<end>::template f<
             C, Tokens...,
-            token_ct<_location, type, lexeme, keyword_literal<type>>>;
+            token_t<_location, type, lexeme, keyword_literal<type>>>;
     };
 
 public:
@@ -331,27 +315,4 @@ public:
     template <typename C>
     using f0 = scan_token_at<0>::template f<C>;
 };
-
-namespace tests {
-    using tokens_1 = run<
-        scan_ct<R"("sup" >= (3 / 2) > "bye" // signing off)">,
-        listed>;
-
-    static_assert(tokens_1::size == 10);
-
-    using tokens_2 = run<
-        scan_ct<"var x = false nil true">,
-        listed>;
-
-    using expected_tokens_2 = list<
-        token_ct<0, token_type::_var, "var">,
-        token_ct<4, token_type::identifier, "x">,
-        token_ct<6, token_type::equal, "=">,
-        token_ct<8, token_type::_false, "false", false>,
-        token_ct<14, token_type::_nil, "nil", nil>,
-        token_ct<18, token_type::_true, "true", true>,
-        token_ct<22, token_type::eof, "">>;
-
-    static_assert(std::same_as<tokens_2, expected_tokens_2>);
-}
 };

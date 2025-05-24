@@ -1,8 +1,8 @@
 #pragma once
 
-#include "string_ct.h"
+#include <ctlox/v1/string.hpp>
 
-namespace ctlox {
+namespace ctlox::v1 {
 enum class token_type {
     left_paren,
     right_paren,
@@ -66,14 +66,27 @@ struct nil_t {
 static constexpr inline none_t none; // not a literal
 static constexpr inline nil_t nil; // nil literal
 
-template <std::size_t _location, token_type _type, string_ct _lexeme, auto _literal = none>
-struct token_ct {
+template <auto _value>
+struct value_t {
+    using type = value_t;
+    using value_type = decltype(_value);
+    static constexpr inline value_type value = _value;
+
+    constexpr value_type operator()() const noexcept { return value; }
+    constexpr explicit(false) operator value_type() const noexcept { return value; } // NOLINT(google-explicit-constructor)
+};
+
+template <std::size_t _location, token_type _type, string _lexeme, auto _literal = none>
+struct token_t {
     static constexpr inline auto location = _location;
     static constexpr inline auto type = _type;
     static constexpr inline auto lexeme = _lexeme;
     static constexpr inline auto literal = _literal;
 };
 
+// expression template-style AST types:
+
+// statements
 template <typename Name, typename InitializerExpr>
 struct var_stmt { };
 
@@ -86,6 +99,7 @@ struct print_stmt { };
 template <typename... Statements>
 struct block_stmt { };
 
+// expressions
 template <auto _literal>
 struct literal_expr { };
 
@@ -103,15 +117,5 @@ struct binary_expr { };
 
 template <typename Expr>
 struct grouping_expr { };
-
-template <auto _value>
-struct value_t {
-    using type = value_t;
-    using value_type = decltype(_value);
-    static constexpr inline value_type value = _value;
-
-    constexpr value_type operator()() const noexcept { return value; }
-    constexpr explicit(false) operator value_type() const noexcept { return value; } // NOLINT(google-explicit-constructor)
-};
 
 }
