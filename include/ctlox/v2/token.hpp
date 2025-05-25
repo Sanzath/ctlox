@@ -5,15 +5,14 @@
 
 #include <format>
 #include <string_view>
-#include <string>
 
 namespace ctlox::v2 {
 
-struct token {
-    token_type type_;
-    std::string_view lexeme_;  // TODO: string_view or string?
+struct token_t {
+    token_type type_ = token_type::eof;
+    std::string_view lexeme_;
     literal_t literal_;
-    int line_;
+    int line_ = -1;
 };
 
 }  // namespace ctlox::v2

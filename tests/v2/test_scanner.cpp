@@ -1,6 +1,8 @@
+#include "framework.hpp"
+
 #include <ctlox/v2/scanner.hpp>
 
-namespace test_scanner::v2 {
+namespace test_v2::test_scanner {
 
 using namespace std::string_view_literals;
 
@@ -13,13 +15,7 @@ constexpr bool perform_tests() {
 string"
 and class else fun for if or print return super this var while
 )"sv;
-    const auto tokens = ctlox::v2::scanner(source).scan_tokens();
-
-    auto expect = [](bool expectation_met) {
-        if (!expectation_met) {
-            throw std::logic_error("test failed");
-        }
-    };
+    const auto tokens = ctlox::v2::scan(source);
 
     expect(tokens.size() == 41);
     expect(tokens[0].type_ == ctlox::token_type::left_paren);

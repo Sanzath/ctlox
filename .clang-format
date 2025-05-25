@@ -9,3 +9,12 @@ FixNamespaceComments: true
 BreakConstructorInitializers: BeforeComma
 
 BreakBeforeBraces: Attach
+
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: true
+
+ColumnLimit: 120
+
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0

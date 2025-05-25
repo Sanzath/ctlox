@@ -9,13 +9,11 @@
 namespace ctlox::v2 {
 
 class scanner {
-
 public:
     constexpr explicit scanner(std::string_view source)
-        : source_(source) {
-    }
+        : source_(source) { }
 
-    constexpr std::vector<token> scan_tokens() && {
+    constexpr std::vector<token_t> scan_tokens() && {
         while (!at_end()) {
             start_ = current_;
             scan_token();
@@ -183,12 +181,14 @@ private:
     [[nodiscard]] constexpr char peek() const {
         if (at_end())
             return '\0';
+
         return source_[current_];
     }
 
     [[nodiscard]] constexpr char peek_next() const {
         if (current_ + 1 >= source_.size())
             return '\0';
+
         return source_[current_ + 1];
     }
 
@@ -207,11 +207,15 @@ private:
 
     std::string_view source_;
 
-    std::vector<token> tokens_;
+    std::vector<token_t> tokens_;
 
     int start_ = 0;
     int current_ = 0;
     int line_ = 1;
 };
+
+constexpr std::vector<token_t> scan(std::string_view source) {
+    return scanner(source).scan_tokens();
+}
 
 }  // namespace ctlox::v2
