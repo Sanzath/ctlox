@@ -11,10 +11,13 @@ BreakConstructorInitializers: BeforeComma
 BreakBeforeBraces: Attach
 
 BinPackArguments: false
+BinPackParameters: OnePerLine
+AlignAfterOpenBracket: AlwaysBreak
 AllowAllArgumentsOnNextLine: true
+BreakTemplateDeclarations: Yes
 
 ColumnLimit: 120
 
 AlignTrailingComments:
   Kind: Always
-  OverEmptyLines: 0
+  OverEmptyLines: 2

@@ -12,39 +12,60 @@ namespace ctlox::v2 {
 class stmt_t;
 using stmt_ptr_t = std::unique_ptr<stmt_t>;
 
-struct block_stmt {
-    std::vector<stmt_ptr_t> statements_;
+struct flat_list_t {
+    std::size_t first_, last_;
 };
 
-struct expression_stmt {
-    expr_ptr_t expression_;
+template <typename StmtPtrList>
+struct basic_block_stmt {
+    StmtPtrList statements_;
 };
 
-struct print_stmt {
-    expr_ptr_t expression_;
+using block_stmt = basic_block_stmt<std::vector<stmt_ptr_t>>;
+using flat_block_stmt = basic_block_stmt<std::size_t>;
+
+template <typename ExprPtr>
+struct basic_expression_stmt {
+    ExprPtr expression_;
 };
 
-struct var_stmt {
+using expression_stmt = basic_expression_stmt<expr_ptr_t>;
+using flat_expression_stmt = basic_expression_stmt<std::size_t>;
+
+template <typename ExprPtr>
+struct basic_print_stmt {
+    ExprPtr expression_;
+};
+
+using print_stmt = basic_print_stmt<expr_ptr_t>;
+using flat_print_stmt = basic_print_stmt<std::size_t>;
+
+template <typename ExprPtr>
+struct basic_var_stmt {
     token_t name_;
-    expr_ptr_t initializer_;
+    ExprPtr initializer_;
 };
 
-class stmt_t final {
+using var_stmt = basic_var_stmt<expr_ptr_t>;
+using flat_var_stmt = basic_var_stmt<std::size_t>;
+
+template <typename StmtPtrList, typename ExprPtr>
+class basic_stmt_t {
     using variant_t = std::variant<
-        block_stmt,
-        expression_stmt,
-        print_stmt,
-        var_stmt>;
+        basic_block_stmt<StmtPtrList>,
+        basic_expression_stmt<ExprPtr>,
+        basic_print_stmt<ExprPtr>,
+        basic_var_stmt<ExprPtr>>;
 
     variant_t stmt_;
 
 public:
     template <typename Stmt>
         requires std::constructible_from<variant_t, Stmt&&>
-    constexpr explicit(false) stmt_t(Stmt&& stmt)
+    constexpr explicit(false) basic_stmt_t(Stmt&& stmt)
         : stmt_(std::forward<Stmt>(stmt)) { }
 
-    constexpr ~stmt_t() = default;
+    constexpr ~basic_stmt_t() = default;
 
     template <typename Visitor>
     constexpr auto visit(Visitor&& v) const {
@@ -61,6 +82,9 @@ public:
         return std::get_if<Stmt>(&stmt_);
     }
 };
+
+class stmt_t : public basic_stmt_t<std::vector<stmt_ptr_t>, expr_ptr_t> {};
+using flat_stmt_t = basic_stmt_t<flat_list_t, std::size_t>;
 
 template <typename Stmt>
 constexpr stmt_ptr_t make_stmt(Stmt&& stmt) {

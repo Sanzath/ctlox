@@ -7,7 +7,6 @@ add_executable(ctlox
         main.cpp
         v1.cpp
         v2.cpp
-        ../include/ctlox/v2/literal.hpp
-        ../include/ctlox/common/characters.hpp
 )
+
 target_link_libraries(ctlox PRIVATE ctlox_lib)

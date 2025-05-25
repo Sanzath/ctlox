@@ -24,7 +24,8 @@ public:
     }
 
 private:
-    template <std::same_as<token_type>... TokenTypes> [[nodiscard]] constexpr bool match(TokenTypes... types) {
+    template <std::same_as<token_type>... TokenTypes>
+    [[nodiscard]] constexpr bool match(TokenTypes... types) {
         const bool matches = (check(types) || ...);
         if (matches)
             advance();
@@ -110,11 +111,12 @@ private:
             token_t oper = previous();
             expr_ptr_t right = comparison();
 
-            expr = make_expr(binary_expr {
-                .left_ = std::move(expr),
-                .operator_ = oper,
-                .right_ = std::move(right),
-            });
+            expr = make_expr(
+                binary_expr {
+                    .left_ = std::move(expr),
+                    .operator_ = oper,
+                    .right_ = std::move(right),
+                });
         }
 
         return expr;
@@ -127,11 +129,12 @@ private:
             token_t oper = previous();
             expr_ptr_t right = term();
 
-            expr = make_expr(binary_expr {
-                .left_ = std::move(expr),
-                .operator_ = oper,
-                .right_ = std::move(right),
-            });
+            expr = make_expr(
+                binary_expr {
+                    .left_ = std::move(expr),
+                    .operator_ = oper,
+                    .right_ = std::move(right),
+                });
         }
 
         return expr;
@@ -144,11 +147,12 @@ private:
             token_t oper = previous();
             expr_ptr_t right = factor();
 
-            expr = make_expr(binary_expr {
-                .left_ = std::move(expr),
-                .operator_ = oper,
-                .right_ = std::move(right),
-            });
+            expr = make_expr(
+                binary_expr {
+                    .left_ = std::move(expr),
+                    .operator_ = oper,
+                    .right_ = std::move(right),
+                });
         }
 
         return expr;
@@ -161,11 +165,12 @@ private:
             token_t oper = previous();
             expr_ptr_t right = unary();
 
-            expr = make_expr(binary_expr {
-                .left_ = std::move(expr),
-                .operator_ = oper,
-                .right_ = std::move(right),
-            });
+            expr = make_expr(
+                binary_expr {
+                    .left_ = std::move(expr),
+                    .operator_ = oper,
+                    .right_ = std::move(right),
+                });
         }
 
         return expr;
@@ -179,8 +184,7 @@ private:
             expr_ptr_t right = unary();
 
             expr = make_expr(unary_expr { .operator_ = oper, .right_ = std::move(right) });
-        }
-        else {
+        } else {
             expr = primary();
         }
 

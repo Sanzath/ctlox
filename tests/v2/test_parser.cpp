@@ -9,7 +9,8 @@ namespace test_v2::test_parser {
 
 using namespace std::string_view_literals;
 
-template <typename T> constexpr const T& expect_holds(const auto& node_ptr) {
+template <typename T>
+constexpr const T& expect_holds(const auto& node_ptr) {
     expect(node_ptr != nullptr);
 
     if (const T* node = node_ptr->template get_if<T>()) {
@@ -222,71 +223,72 @@ namespace test_complex_expressions {
         };
     }
 
+    // clang-format off: manually control how these tree formats are formatted
     // assignment binding order
-    static_assert(test_expression("foo = bar = nil;",  //
-        assign_expr("foo"sv,                           // (force line breaks)
-            assign_expr("bar"sv,                       //
-                literal_expr(ctlox::v2::nil)))));      //
+    static_assert(test_expression("foo = bar = nil;",
+        assign_expr("foo"sv,
+            assign_expr("bar"sv,
+                literal_expr(ctlox::v2::nil)))));
 
     // assignment/equality precedence
-    static_assert(test_expression("foo = bar == zim;",  //
-        assign_expr("foo"sv,                            // (foce line breaks)
-            binary_expr(                                //
-                ctlox::token_type::equal_equal,         //
-                variable_expr("bar"sv),                 //
-                variable_expr("zim"sv)))));             //
+    static_assert(test_expression("foo = bar == zim;",
+        assign_expr("foo"sv,
+            binary_expr(
+                ctlox::token_type::equal_equal,
+                variable_expr("bar"sv),
+                variable_expr("zim"sv)))));
 
     // equality binding order
-    static_assert(test_expression("1 == 2 != 3 == 4;",       //
-        binary_expr(ctlox::token_type::equal_equal,          // (force line breaks)
-            binary_expr(ctlox::token_type::bang_equal,       //
-                binary_expr(ctlox::token_type::equal_equal,  //
-                    literal_expr(1.0),                       //
-                    literal_expr(2.0)),                      //
-                literal_expr(3.0)),                          //
-            literal_expr(4.0))));                            //
+    static_assert(test_expression("1 == 2 != 3 == 4;",
+        binary_expr(ctlox::token_type::equal_equal,
+            binary_expr(ctlox::token_type::bang_equal,
+                binary_expr(ctlox::token_type::equal_equal,
+                    literal_expr(1.0),
+                    literal_expr(2.0)),
+                literal_expr(3.0)),
+            literal_expr(4.0))));
 
     // equality/comparison precedence
-    static_assert(test_expression(R"("foo" > "bar" == "bar" <= zim;)",  //
-        binary_expr(ctlox::token_type::equal_equal,                     // (force line breaks)
-            binary_expr(ctlox::token_type::greater,                     //
-                literal_expr("foo"sv),                                  //
-                literal_expr("bar"sv)),                                 //
-            binary_expr(ctlox::token_type::less_equal,                  //
-                literal_expr("bar"sv),                                  //
-                variable_expr("zim"sv)))));                             //
+    static_assert(test_expression(R"("foo" > "bar" == "bar" <= zim;)",
+        binary_expr(ctlox::token_type::equal_equal,
+            binary_expr(ctlox::token_type::greater,
+                literal_expr("foo"sv),
+                literal_expr("bar"sv)),
+            binary_expr(ctlox::token_type::less_equal,
+                literal_expr("bar"sv),
+                variable_expr("zim"sv)))));
 
     // comparison binding order
-    static_assert(test_expression("1 < 2 >= 3 <= 4 > 5;",      //
-        binary_expr(ctlox::token_type::greater,                // (force line breaks)
-            binary_expr(ctlox::token_type::less_equal,         //
-                binary_expr(ctlox::token_type::greater_equal,  //
-                    binary_expr(ctlox::token_type::less,       //
-                        literal_expr(1.0),                     //
-                        literal_expr(2.0)),                    //
-                    literal_expr(3.0)),                        //
-                literal_expr(4.0)),                            //
-            literal_expr(5.0))));                              //
+    static_assert(test_expression("1 < 2 >= 3 <= 4 > 5;",
+        binary_expr(ctlox::token_type::greater,
+            binary_expr(ctlox::token_type::less_equal,
+                binary_expr(ctlox::token_type::greater_equal,
+                    binary_expr(ctlox::token_type::less,
+                        literal_expr(1.0),
+                        literal_expr(2.0)),
+                    literal_expr(3.0)),
+                literal_expr(4.0)),
+            literal_expr(5.0))));
 
     // comparison/term precedence
-    static_assert(test_expression("1 > 2 + 3 < 4;",   //
-        binary_expr(ctlox::token_type::less,          //
-            binary_expr(ctlox::token_type::greater,   // (force line breaks)
-                literal_expr(1.0),                    //
-                binary_expr(ctlox::token_type::plus,  //
-                    literal_expr(2.0),                //
-                    literal_expr(3.0))),              //
-            literal_expr(4.0))));                     //
+    static_assert(test_expression("1 > 2 + 3 < 4;",
+        binary_expr(ctlox::token_type::less,
+            binary_expr(ctlox::token_type::greater,
+                literal_expr(1.0),
+                binary_expr(ctlox::token_type::plus,
+                    literal_expr(2.0),
+                    literal_expr(3.0))),
+            literal_expr(4.0))));
 
     // term binding order
-    static_assert(test_expression(R"(foo + "bar" + baz - 3;)",  //
-        binary_expr(ctlox::token_type::minus,                   // (force line breaks)
-            binary_expr(ctlox::token_type::plus,                //
-                binary_expr(ctlox::token_type::plus,            //
-                    variable_expr("foo"sv),                     //
-                    literal_expr("bar"sv)),                     //
-                variable_expr("baz"sv)),                        //
-            literal_expr(3.0))));                               //
+    static_assert(test_expression(R"(foo + "bar" + baz - 3;)",
+        binary_expr(ctlox::token_type::minus,
+            binary_expr(ctlox::token_type::plus,
+                binary_expr(ctlox::token_type::plus,
+                    variable_expr("foo"sv),
+                    literal_expr("bar"sv)),
+                variable_expr("baz"sv)),
+            literal_expr(3.0))));
 
     // term/factor precedence
     //        __(-)__
@@ -296,73 +298,73 @@ namespace test_complex_expressions {
     // (1)   (*)   (4)   (5)
     //      /   \
     //    (2)   (3)
-    static_assert(test_expression("1 + 2 * 3 - 4 / 5;",  //
-        binary_expr(ctlox::token_type::minus,            //  (force line breaks)
-            binary_expr(ctlox::token_type::plus,         //
-                literal_expr(1.0),                       //
-                binary_expr(ctlox::token_type::star,     //
-                    literal_expr(2.0),                   //
-                    literal_expr(3.0))),                 //
-            binary_expr(ctlox::token_type::slash,        //
-                literal_expr(4.0),                       //
-                literal_expr(5.0)))));                   //
+    static_assert(test_expression("1 + 2 * 3 - 4 / 5;",
+        binary_expr(ctlox::token_type::minus,
+            binary_expr(ctlox::token_type::plus,
+                literal_expr(1.0),
+                binary_expr(ctlox::token_type::star,
+                    literal_expr(2.0),
+                    literal_expr(3.0))),
+            binary_expr(ctlox::token_type::slash,
+                literal_expr(4.0),
+                literal_expr(5.0)))));
 
     // factor binding order
-    static_assert(test_expression("1 / 2 / 3 * 4 / 5;",    //
-        binary_expr(ctlox::token_type::slash,              // (force line breaks)
-            binary_expr(ctlox::token_type::star,           //
-                binary_expr(ctlox::token_type::slash,      //
-                    binary_expr(ctlox::token_type::slash,  //
-                        literal_expr(1.0),                 //
-                        literal_expr(2.0)),                //
-                    literal_expr(3.0)),                    //
-                literal_expr(4.0)),                        //
-            literal_expr(5.0))));                          //
+    static_assert(test_expression("1 / 2 / 3 * 4 / 5;",
+        binary_expr(ctlox::token_type::slash,
+            binary_expr(ctlox::token_type::star,
+                binary_expr(ctlox::token_type::slash,
+                    binary_expr(ctlox::token_type::slash,
+                        literal_expr(1.0),
+                        literal_expr(2.0)),
+                    literal_expr(3.0)),
+                literal_expr(4.0)),
+            literal_expr(5.0))));
 
     // factor/unary precedence
-    static_assert(test_expression("-2 * !false;",  //
-        binary_expr(ctlox::token_type::star,       // (force line breaks)
-            unary_expr(ctlox::token_type::minus,   //
-                literal_expr(2.0)),                //
-            unary_expr(ctlox::token_type::bang,    //
-                literal_expr(false))               //
-            )));                                   //
+    static_assert(test_expression("-2 * !false;",
+        binary_expr(ctlox::token_type::star,
+            unary_expr(ctlox::token_type::minus,
+                literal_expr(2.0)),
+            unary_expr(ctlox::token_type::bang,
+                literal_expr(false)))));
 
     // unary binding order
-    static_assert(test_expression("!!-val;",          //
-        unary_expr(ctlox::token_type::bang,           // (force line breaks)
-            unary_expr(ctlox::token_type::bang,       //
-                unary_expr(ctlox::token_type::minus,  //
-                    variable_expr("val"))))));        //
+    static_assert(test_expression("!!-val;",
+        unary_expr(ctlox::token_type::bang,
+            unary_expr(ctlox::token_type::bang,
+                unary_expr(ctlox::token_type::minus,
+                    variable_expr("val"))))));
 
     // grouping precedence
-    static_assert(test_expression("-(a + b) * (c > d);",  //
-        binary_expr(ctlox::token_type::star,              // (force line breaks)
-            unary_expr(ctlox::token_type::minus,          //
-                grouping_expr(                            //
-                    binary_expr(ctlox::token_type::plus,  //
-                        variable_expr("a"sv),             //
-                        variable_expr("b"sv)))),          //
-            grouping_expr(                                //
-                binary_expr(ctlox::token_type::greater,   //
-                    variable_expr("c"sv),                 //
-                    variable_expr("d"sv))))));            //
+    static_assert(test_expression("-(a + b) * (c > d);",
+        binary_expr(ctlox::token_type::star,
+            unary_expr(ctlox::token_type::minus,
+                grouping_expr(
+                    binary_expr(ctlox::token_type::plus,
+                        variable_expr("a"sv),
+                        variable_expr("b"sv)))),
+            grouping_expr(
+                binary_expr(ctlox::token_type::greater,
+                    variable_expr("c"sv),
+                    variable_expr("d"sv))))));
 
     // grouping nesting
-    static_assert(test_expression("!((((a)) * (b + c)) == 17);",      //
-        unary_expr(ctlox::token_type::bang,                           // (force line breaks)
-            grouping_expr(                                            //
-                binary_expr(ctlox::token_type::equal_equal,           //
-                    grouping_expr(                                    //
-                        binary_expr(ctlox::token_type::star,          //
-                            grouping_expr(                            //
-                                grouping_expr(                        //
-                                    variable_expr("a"sv))),           //
-                            grouping_expr(                            //
-                                binary_expr(ctlox::token_type::plus,  //
-                                    variable_expr("b"sv),             //
-                                    variable_expr("c"sv))))),         //
-                    literal_expr(17.0))))));                          //
+    static_assert(test_expression("!((((a)) * (b + c)) == 17);",
+        unary_expr(ctlox::token_type::bang,
+            grouping_expr(
+                binary_expr(ctlox::token_type::equal_equal,
+                    grouping_expr(
+                        binary_expr(ctlox::token_type::star,
+                            grouping_expr(
+                                grouping_expr(
+                                    variable_expr("a"sv))),
+                            grouping_expr(
+                                binary_expr(ctlox::token_type::plus,
+                                    variable_expr("b"sv),
+                                    variable_expr("c"sv))))),
+                    literal_expr(17.0))))));
+    // clang-format on
 
 }  // namespace test_complex_expressions
 
