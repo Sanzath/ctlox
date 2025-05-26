@@ -90,7 +90,7 @@ private:
         expr_ptr_t expr = equality();
 
         if (match(token_type::equal)) {
-            token_t equals = previous();
+            // token_t equals = previous();
             expr_ptr_t value = assignment();
 
             if (const auto* var_expr = expr->get_if<variable_expr>()) {
@@ -113,8 +113,8 @@ private:
 
             expr = make_expr(
                 binary_expr {
-                    .left_ = std::move(expr),
                     .operator_ = oper,
+                    .left_ = std::move(expr),
                     .right_ = std::move(right),
                 });
         }
@@ -131,8 +131,8 @@ private:
 
             expr = make_expr(
                 binary_expr {
-                    .left_ = std::move(expr),
                     .operator_ = oper,
+                    .left_ = std::move(expr),
                     .right_ = std::move(right),
                 });
         }
@@ -149,8 +149,8 @@ private:
 
             expr = make_expr(
                 binary_expr {
-                    .left_ = std::move(expr),
                     .operator_ = oper,
+                    .left_ = std::move(expr),
                     .right_ = std::move(right),
                 });
         }
@@ -167,8 +167,8 @@ private:
 
             expr = make_expr(
                 binary_expr {
-                    .left_ = std::move(expr),
                     .operator_ = oper,
+                    .left_ = std::move(expr),
                     .right_ = std::move(right),
                 });
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ctlox/v2/expression.hpp>
+#include <ctlox/v2/flat.hpp>
 #include <ctlox/v2/token.hpp>
 
 #include <memory>
@@ -11,18 +12,19 @@ namespace ctlox::v2 {
 
 class stmt_t;
 using stmt_ptr_t = std::unique_ptr<stmt_t>;
+using stmt_list_t = std::vector<stmt_ptr_t>;
 
-struct flat_list_t {
-    std::size_t first_, last_;
-};
+class flat_stmt_t;
+using flat_stmt_ptr_t = flat_ptr_t<flat_stmt_t>;
+using flat_stmt_list_t = flat_list_t<flat_stmt_t>;
 
-template <typename StmtPtrList>
+template <typename StmtList>
 struct basic_block_stmt {
-    StmtPtrList statements_;
+    StmtList statements_;
 };
 
-using block_stmt = basic_block_stmt<std::vector<stmt_ptr_t>>;
-using flat_block_stmt = basic_block_stmt<std::size_t>;
+using block_stmt = basic_block_stmt<stmt_list_t>;
+using flat_block_stmt = basic_block_stmt<flat_stmt_list_t>;
 
 template <typename ExprPtr>
 struct basic_expression_stmt {
@@ -30,7 +32,7 @@ struct basic_expression_stmt {
 };
 
 using expression_stmt = basic_expression_stmt<expr_ptr_t>;
-using flat_expression_stmt = basic_expression_stmt<std::size_t>;
+using flat_expression_stmt = basic_expression_stmt<flat_expr_ptr_t>;
 
 template <typename ExprPtr>
 struct basic_print_stmt {
@@ -38,7 +40,7 @@ struct basic_print_stmt {
 };
 
 using print_stmt = basic_print_stmt<expr_ptr_t>;
-using flat_print_stmt = basic_print_stmt<std::size_t>;
+using flat_print_stmt = basic_print_stmt<flat_expr_ptr_t>;
 
 template <typename ExprPtr>
 struct basic_var_stmt {
@@ -47,12 +49,12 @@ struct basic_var_stmt {
 };
 
 using var_stmt = basic_var_stmt<expr_ptr_t>;
-using flat_var_stmt = basic_var_stmt<std::size_t>;
+using flat_var_stmt = basic_var_stmt<flat_expr_ptr_t>;
 
-template <typename StmtPtrList, typename ExprPtr>
+template <typename StmtList, typename ExprPtr>
 class basic_stmt_t {
     using variant_t = std::variant<
-        basic_block_stmt<StmtPtrList>,
+        basic_block_stmt<StmtList>,
         basic_expression_stmt<ExprPtr>,
         basic_print_stmt<ExprPtr>,
         basic_var_stmt<ExprPtr>>;
@@ -62,10 +64,10 @@ class basic_stmt_t {
 public:
     template <typename Stmt>
         requires std::constructible_from<variant_t, Stmt&&>
-    constexpr explicit(false) basic_stmt_t(Stmt&& stmt)
+    constexpr basic_stmt_t(Stmt&& stmt)
         : stmt_(std::forward<Stmt>(stmt)) { }
 
-    constexpr ~basic_stmt_t() = default;
+    constexpr ~basic_stmt_t() noexcept = default;
 
     template <typename Visitor>
     constexpr auto visit(Visitor&& v) const {
@@ -83,8 +85,18 @@ public:
     }
 };
 
-class stmt_t : public basic_stmt_t<std::vector<stmt_ptr_t>, expr_ptr_t> {};
-using flat_stmt_t = basic_stmt_t<flat_list_t, std::size_t>;
+// These types need to be defined as a classes rather than aliases so that
+// they can refer to themselves through their pointer types.
+class stmt_t : public basic_stmt_t<stmt_list_t, expr_ptr_t> {
+public:
+    using basic_stmt_t::basic_stmt_t;
+    constexpr ~stmt_t() noexcept = default;
+};
+class flat_stmt_t : public basic_stmt_t<flat_stmt_list_t, flat_expr_ptr_t> {
+public:
+    using basic_stmt_t::basic_stmt_t;
+    constexpr ~flat_stmt_t() noexcept = default;
+};
 
 template <typename Stmt>
 constexpr stmt_ptr_t make_stmt(Stmt&& stmt) {

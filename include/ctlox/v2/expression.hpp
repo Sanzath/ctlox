@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctlox/v2/flat.hpp>
 #include <ctlox/v2/token.hpp>
 
 #include <memory>
@@ -10,6 +11,9 @@ namespace ctlox::v2 {
 class expr_t;
 using expr_ptr_t = std::unique_ptr<expr_t>;
 
+class flat_expr_t;
+using flat_expr_ptr_t = flat_ptr_t<flat_expr_t>;
+
 template <typename ExprPtr>
 struct basic_assign_expr {
     token_t name_;
@@ -17,17 +21,17 @@ struct basic_assign_expr {
 };
 
 using assign_expr = basic_assign_expr<expr_ptr_t>;
-using flat_assign_expr = basic_assign_expr<std::size_t>;
+using flat_assign_expr = basic_assign_expr<flat_expr_ptr_t>;
 
 template <typename ExprPtr>
 struct basic_binary_expr {
-    ExprPtr left_;
     token_t operator_;
+    ExprPtr left_;
     ExprPtr right_;
 };
 
 using binary_expr = basic_binary_expr<expr_ptr_t>;
-using flat_binary_expr = basic_binary_expr<std::size_t>;
+using flat_binary_expr = basic_binary_expr<flat_expr_ptr_t>;
 
 template <typename ExprPtr>
 struct basic_grouping_expr {
@@ -35,7 +39,7 @@ struct basic_grouping_expr {
 };
 
 using grouping_expr = basic_grouping_expr<expr_ptr_t>;
-using flat_grouping_expr = basic_grouping_expr<std::size_t>;
+using flat_grouping_expr = basic_grouping_expr<flat_expr_ptr_t>;
 
 struct basic_literal_expr {
     literal_t value_;
@@ -51,7 +55,7 @@ struct basic_unary_expr {
 };
 
 using unary_expr = basic_unary_expr<expr_ptr_t>;
-using flat_unary_expr = basic_unary_expr<std::size_t>;
+using flat_unary_expr = basic_unary_expr<flat_expr_ptr_t>;
 
 struct basic_variable_expr {
     token_t name_;
@@ -75,10 +79,10 @@ class basic_expr_t {
 public:
     template <typename Expr>
         requires std::constructible_from<variant_t, Expr&&>
-    constexpr explicit(false) basic_expr_t(Expr&& expr)
+    constexpr basic_expr_t(Expr&& expr)
         : expr_(std::forward<Expr>(expr)) { }
 
-    constexpr ~basic_expr_t() = default;
+    constexpr ~basic_expr_t() noexcept = default;
 
     template <typename Visitor>
     constexpr auto visit(Visitor&& v) const {
@@ -96,11 +100,18 @@ public:
     }
 };
 
-// expr_t needs to be defined as a class rather than an alias so that it can
-// refer to itself through expr_ptr_t.
-class expr_t : public basic_expr_t<expr_ptr_t> { };
-
-using flat_expr_t = basic_expr_t<std::size_t>;
+// These types need to be defined as a classes rather than aliases so that
+// they can refer to themselves through their pointer types.
+class expr_t : public basic_expr_t<expr_ptr_t> {
+public:
+    using basic_expr_t::basic_expr_t;
+    constexpr ~expr_t() noexcept = default;
+};
+class flat_expr_t : public basic_expr_t<flat_expr_ptr_t> {
+public:
+    using basic_expr_t::basic_expr_t;
+    constexpr ~flat_expr_t() noexcept = default;
+};
 
 template <typename Expr>
 constexpr expr_ptr_t make_expr(Expr&& expr) {

@@ -192,13 +192,9 @@ private:
         return source_[current_ + 1];
     }
 
-    [[nodiscard]] constexpr bool at_end() const {
-        return current_ >= source_.size();
-    }
+    [[nodiscard]] constexpr bool at_end() const { return current_ >= source_.size(); }
 
-    constexpr char advance() {
-        return source_[current_++];
-    }
+    constexpr char advance() { return source_[current_++]; }
 
     constexpr void add_token(token_type type, literal_t literal = none) {
         auto text = source_.substr(start_, current_ - start_);
@@ -214,8 +210,6 @@ private:
     int line_ = 1;
 };
 
-constexpr std::vector<token_t> scan(std::string_view source) {
-    return scanner(source).scan_tokens();
-}
+constexpr std::vector<token_t> scan(std::string_view source) { return scanner(source).scan_tokens(); }
 
 }  // namespace ctlox::v2
