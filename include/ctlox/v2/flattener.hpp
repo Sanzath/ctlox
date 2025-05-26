@@ -19,14 +19,14 @@ struct flat_statements_t {
 
 class flattener {
 public:
-    constexpr flattener(std::span<const stmt_t> input)
+    constexpr flattener(std::span<const stmt_ptr_t> input)
         : input_(input) { }
 
     constexpr flat_statements_t flatten() && {
         flat_stmt_list_t root_block = reserve_block(input_.size());
 
         for (auto [ptr, statement] : std::views::zip(root_block, input_)) {
-            put_stmt(ptr, statement.visit(*this));
+            put_stmt(ptr, statement->visit(*this));
         }
 
         return flat_statements_t {
@@ -37,13 +37,14 @@ public:
     }
 
     constexpr flat_stmt_t operator()(const block_stmt& statement) {
-        flat_stmt_list_t block = reserve_block(statement.statements_.size());
+        auto statements = std::span(statement.statements_);
+        flat_stmt_list_t block = reserve_block(statements.size());
 
-        for (auto [ptr, statement] : std::views::zip(block, statement.statements_)) {
+        for (auto [ptr, statement] : std::views::zip(block, statements)) {
             put_stmt(ptr, statement->visit(*this));
         }
 
-        return flat_block_stmt {};
+        return flat_block_stmt { .statements_ = block };
     }
 
     constexpr flat_stmt_t operator()(const expression_stmt& statement) {
@@ -145,12 +146,12 @@ private:
 
     constexpr void put_expr(flat_expr_ptr_t ptr, flat_expr_t&& expr) { expressions_[ptr.i] = std::move(expr); }
 
-    std::span<const stmt_t> input_;
+    std::span<const stmt_ptr_t> input_;
 
     std::vector<flat_stmt_t> statements_;
     std::vector<flat_expr_t> expressions_;
 };
 
-constexpr flat_statements_t flatten(std::span<const stmt_t> input) { return flattener(input).flatten(); }
+constexpr flat_statements_t flatten(std::span<const stmt_ptr_t> input) { return flattener(input).flatten(); }
 
 }  // namespace ctlox::v2

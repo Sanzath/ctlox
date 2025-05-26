@@ -32,3 +32,12 @@ move-constructor to be a non-constant evaluation, due to a supposed read of
 an uninitialized symbol.
 
 Rewriting the function to have a single return statement resolves the problem.
+
+### `std::vector` iteration
+
+In `ctlox::v2::flattener`, certain statements involving vector iteration
+failed to compile due to the checks in vector iterator seemingly accessing
+an undefined symbol.
+
+Constructing a span from the vector and iterating over that span resolves 
+the problem.

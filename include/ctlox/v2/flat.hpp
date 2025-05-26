@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <iterator>
 #include <limits>
 
@@ -32,7 +31,7 @@ struct flat_list_t final {
         using value_type = const flat_ptr_t<T>;
         using pointer = const flat_ptr_t<T>*;
         using reference = const flat_ptr_t<T>&;
-        using iterator_category = std::random_access_iterator_tag;
+        using iterator_category = std::forward_iterator_tag;
 
         constexpr reference operator*() const noexcept { return ptr_; }
         constexpr pointer operator->() const noexcept { return &ptr_; }
@@ -56,5 +55,7 @@ struct flat_list_t final {
     constexpr const_iterator begin() const noexcept { return const_iterator { first_ }; }
     constexpr const_iterator end() const noexcept { return const_iterator { last_ }; }
 };
+
+static_assert(std::forward_iterator<typename flat_list_t<int>::const_iterator>);
 
 }  // namespace ctlox::v2
