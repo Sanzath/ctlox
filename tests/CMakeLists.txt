@@ -9,7 +9,7 @@ add_executable(ctlox_tests
         v2/framework.hpp
         v2/test_scanner.cpp
         v2/test_parser.cpp
-        v2/test_flattener.cpp
+        v2/test_serializer.cpp
 )
 
 target_link_libraries(ctlox_tests PRIVATE ctlox_lib)

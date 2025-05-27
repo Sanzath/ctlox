@@ -51,6 +51,9 @@ struct flat_list final {
 
     constexpr const_iterator begin() const noexcept { return const_iterator { first_ }; }
     constexpr const_iterator end() const noexcept { return const_iterator { last_ }; }
+
+    constexpr std::size_t size() const noexcept { return last_.i - first_.i; }
+    constexpr bool empty() const noexcept { return first_ == last_; }
 };
 
 static_assert(std::forward_iterator<typename flat_list<int>::const_iterator>);

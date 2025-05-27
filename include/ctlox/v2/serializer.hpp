@@ -10,7 +10,7 @@
 
 namespace ctlox::v2 {
 
-struct flat_statements_t {
+struct flat_program {
     constexpr std::span<const flat_stmt_t> root_range() const noexcept {
         return range(root_block_);
     }
@@ -29,19 +29,19 @@ struct flat_statements_t {
     flat_stmt_list root_block_;
 };
 
-class flattener {
+class serializer {
 public:
-    constexpr flattener(std::span<const stmt_ptr> input)
+    constexpr serializer(std::span<const stmt_ptr> input)
         : input_(input) { }
 
-    constexpr flat_statements_t flatten() && {
+    constexpr flat_program serialize() && {
         flat_stmt_list root_block = reserve_block(input_.size());
 
         for (auto [ptr, statement] : std::views::zip(root_block, input_)) {
             put_stmt(ptr, statement->visit(*this));
         }
 
-        return flat_statements_t {
+        return flat_program {
             std::move(statements_),
             std::move(expressions_),
             root_block,
@@ -164,6 +164,6 @@ private:
     std::vector<flat_expr_t> expressions_;
 };
 
-constexpr flat_statements_t flatten(std::span<const stmt_ptr> input) { return flattener(input).flatten(); }
+constexpr flat_program serialize(std::span<const stmt_ptr> input) { return serializer(input).serialize(); }
 
 }  // namespace ctlox::v2
