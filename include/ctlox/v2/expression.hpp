@@ -79,8 +79,11 @@ class basic_expr_t {
 public:
     template <typename Expr>
         requires std::constructible_from<variant_t, Expr&&>
-    constexpr basic_expr_t(Expr&& expr)
+    constexpr basic_expr_t(Expr&& expr) noexcept
         : expr_(std::forward<Expr>(expr)) { }
+
+    constexpr basic_expr_t() noexcept
+        : expr_(std::in_place_type<basic_literal_expr>) { }
 
     constexpr ~basic_expr_t() noexcept = default;
 

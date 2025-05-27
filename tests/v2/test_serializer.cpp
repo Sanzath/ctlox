@@ -13,7 +13,7 @@ namespace test_v2::test_serializer {
 using namespace std::string_view_literals;
 
 template <typename T, typename NodeType>
-constexpr const T& expect_holds(const ctlox::v2::flat_program& program, ctlox::v2::flat_ptr<NodeType> node_ptr) {
+constexpr const T& expect_holds(const auto& program, ctlox::v2::flat_ptr<NodeType> node_ptr) {
     expect(node_ptr != ctlox::v2::flat_nullptr);
 
     if (const T* node = program[node_ptr].template get_if<T>()) {
@@ -24,13 +24,11 @@ constexpr const T& expect_holds(const ctlox::v2::flat_program& program, ctlox::v
 }
 
 constexpr auto null_expr() {
-    return [](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
-        expect(node_ptr == ctlox::v2::flat_nullptr);
-    };
+    return [](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
 }
 
 constexpr auto assign_expr(std::string_view name, auto check_value) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& assign_expr = expect_holds<ctlox::v2::flat_assign_expr>(program, node_ptr);
         expect(assign_expr.name_.lexeme_ == name);
         check_value(program, assign_expr.value_);
@@ -38,7 +36,7 @@ constexpr auto assign_expr(std::string_view name, auto check_value) {
 }
 
 constexpr auto binary_expr(ctlox::token_type oper, auto check_left, auto check_right) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& binary_expr = expect_holds<ctlox::v2::flat_binary_expr>(program, node_ptr);
         expect(binary_expr.operator_.type_ == oper);
         check_left(program, binary_expr.left_);
@@ -47,21 +45,21 @@ constexpr auto binary_expr(ctlox::token_type oper, auto check_left, auto check_r
 }
 
 constexpr auto grouping_expr(auto check_expr) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& grouping_expr = expect_holds<ctlox::v2::flat_grouping_expr>(program, node_ptr);
         check_expr(program, grouping_expr.expr_);
     };
 }
 
 constexpr auto literal_expr(const ctlox::v2::literal_t& literal) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& literal_expr = expect_holds<ctlox::v2::flat_literal_expr>(program, node_ptr);
         expect(literal_expr.value_ == literal);
     };
 }
 
 constexpr auto unary_expr(ctlox::token_type oper, auto check_right) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& unary_expr = expect_holds<ctlox::v2::flat_unary_expr>(program, node_ptr);
         expect(unary_expr.operator_.type_ == oper);
         check_right(program, unary_expr.right_);
@@ -69,14 +67,14 @@ constexpr auto unary_expr(ctlox::token_type oper, auto check_right) {
 }
 
 constexpr auto variable_expr(std::string_view name) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_expr_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& variable_expr = expect_holds<ctlox::v2::flat_variable_expr>(program, node_ptr);
         expect(variable_expr.name_.lexeme_ == name);
     };
 }
 
 constexpr auto block_stmt(auto... check_statements) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_stmt_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& block_stmt = expect_holds<ctlox::v2::flat_block_stmt>(program, node_ptr);
         const auto& statements = block_stmt.statements_;
 
@@ -90,21 +88,21 @@ constexpr auto block_stmt(auto... check_statements) {
 }
 
 constexpr auto expression_stmt(auto check_expression) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_stmt_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& expression_stmt = expect_holds<ctlox::v2::flat_expression_stmt>(program, node_ptr);
         check_expression(program, expression_stmt.expression_);
     };
 }
 
 constexpr auto print_stmt(auto check_expression) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_stmt_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& print_stmt = expect_holds<ctlox::v2::flat_print_stmt>(program, node_ptr);
         check_expression(program, print_stmt.expression_);
     };
 }
 
 constexpr auto var_stmt(std::string_view name, auto check_initializer) {
-    return [=](const ctlox::v2::flat_program& program, ctlox::v2::flat_stmt_ptr node_ptr) {
+    return [=](const auto& program, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& var_stmt = expect_holds<ctlox::v2::flat_var_stmt>(program, node_ptr);
         expect(var_stmt.name_.lexeme_ == name);
         check_initializer(program, var_stmt.initializer_);
@@ -188,4 +186,63 @@ print !foo;
 
 static_assert(test_sizes());
 
-}  // namespace test_v2::test_flattener
+constexpr bool test_static_serialize() {
+    constexpr auto source = R"(
+var foo = (12 + 13) / 2;
+{
+    print foo;
+    var space = " ";
+    foo = "Hello," + space + "world!";
+}
+print !foo;
+)";
+
+    constexpr ctlox::v2::program_generator auto program_generator
+        = [] { return ctlox::v2::parse(ctlox::v2::scan(source)); };
+    constexpr auto program = ctlox::v2::static_serialize<program_generator>();
+
+    static_assert(program.root_block_.first_.i == 0);
+    static_assert(program.root_block_.last_.i == 3);
+
+    static_assert(program.statements_.size() == 6);
+    static_assert(program.expressions_.size() == 16);
+
+    // clang-format off
+    constexpr auto check_0 =
+        var_stmt("foo",
+            binary_expr(ctlox::token_type::slash,
+                grouping_expr(
+                    binary_expr(ctlox::token_type::plus,
+                        literal_expr(12.0),
+                        literal_expr(13.0))),
+                literal_expr(2.0)));
+    constexpr auto check_1 =
+        block_stmt(
+            print_stmt(
+                variable_expr("foo")),
+            var_stmt("space",
+                literal_expr(" ")),
+            expression_stmt(
+                assign_expr("foo",
+                    binary_expr(ctlox::token_type::plus,
+                        binary_expr(ctlox::token_type::plus,
+                            literal_expr("Hello,"),
+                            variable_expr("space")),
+                        literal_expr("world!"))))
+        );
+    constexpr auto check_2 =
+        print_stmt(
+            unary_expr(ctlox::token_type::bang,
+                variable_expr("foo")));
+    // clang-format on
+
+    static_assert((check_0(program, ctlox::v2::flat_stmt_ptr { 0 }), true));
+    static_assert((check_1(program, ctlox::v2::flat_stmt_ptr { 1 }), true));
+    static_assert((check_2(program, ctlox::v2::flat_stmt_ptr { 2 }), true));
+
+    return true;
+}
+
+static_assert(test_static_serialize());
+
+}  // namespace test_v2::test_serializer

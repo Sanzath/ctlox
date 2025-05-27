@@ -64,8 +64,11 @@ class basic_stmt_t {
 public:
     template <typename Stmt>
         requires std::constructible_from<variant_t, Stmt&&>
-    constexpr basic_stmt_t(Stmt&& stmt)
+    constexpr basic_stmt_t(Stmt&& stmt) noexcept
         : stmt_(std::forward<Stmt>(stmt)) { }
+
+    constexpr basic_stmt_t() noexcept
+        : stmt_(std::in_place_type<basic_expression_stmt<ExprPtr>>) { };
 
     constexpr ~basic_stmt_t() noexcept = default;
 

@@ -3,6 +3,7 @@
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/statement.hpp>
 
+#include <array>
 #include <cassert>
 #include <ranges>
 #include <span>
@@ -10,24 +11,27 @@
 
 namespace ctlox::v2 {
 
-struct flat_program {
-    constexpr std::span<const flat_stmt_t> root_range() const noexcept {
-        return range(root_block_);
-    }
+template <typename Statements, typename Expressions>
+struct basic_flat_program {
+    constexpr std::span<const flat_stmt_t> root_range() const noexcept { return range(root_block_); }
 
     constexpr std::span<const flat_stmt_t> range(flat_stmt_list list) const noexcept {
-        return std::span(statements_).subspan(list.first_.i, list.last_.i - list.first_.i);
+        return std::span(statements_).subspan(list.first_.i, list.size());
     }
 
     constexpr const flat_stmt_t& operator[](flat_stmt_ptr ptr) const noexcept { return statements_[ptr.i]; }
-
     constexpr const flat_expr_t& operator[](flat_expr_ptr ptr) const noexcept { return expressions_[ptr.i]; }
 
-    std::vector<flat_stmt_t> statements_;
-    std::vector<flat_expr_t> expressions_;
+    Statements statements_;
+    Expressions expressions_;
 
     flat_stmt_list root_block_;
 };
+
+using flat_program = basic_flat_program<std::vector<flat_stmt_t>, std::vector<flat_expr_t>>;
+
+template <std::size_t M, std::size_t N>
+struct static_program : basic_flat_program<std::array<flat_stmt_t, M>, std::array<flat_expr_t, N>> { };
 
 class serializer {
 public:
@@ -165,5 +169,32 @@ private:
 };
 
 constexpr flat_program serialize(std::span<const stmt_ptr> input) { return serializer(input).serialize(); }
+
+template <typename Gen>
+concept program_generator = requires(Gen gen) {
+    { gen() } -> std::convertible_to<std::span<const stmt_ptr>>;
+};
+
+template <program_generator auto gen>
+constexpr auto static_serialize() {
+    constexpr std::pair<std::size_t, std::size_t> sizes = [] {
+        const auto program = serialize(gen());
+        return std::pair { program.statements_.size(), program.expressions_.size() };
+    }();
+
+    constexpr std::size_t M = sizes.first;
+    constexpr std::size_t N = sizes.second;
+
+    return []() -> static_program<M, N> {
+        const auto flat_program = serialize(gen());
+
+        static_program<M, N> static_program;
+        std::ranges::copy(flat_program.statements_, static_program.statements_.begin());
+        std::ranges::copy(flat_program.expressions_, static_program.expressions_.begin());
+        static_program.root_block_ = flat_program.root_block_;
+
+        return static_program;
+    }();
+}
 
 }  // namespace ctlox::v2
