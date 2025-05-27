@@ -3,49 +3,27 @@
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/statement.hpp>
 
-#include <array>
-#include <cassert>
+#include <ctlox/v2/flat_ast.hpp>
+
 #include <ranges>
 #include <span>
 #include <vector>
 
 namespace ctlox::v2 {
 
-template <typename Statements, typename Expressions>
-struct basic_flat_program {
-    constexpr std::span<const flat_stmt_t> root_range() const noexcept { return range(root_block_); }
-
-    constexpr std::span<const flat_stmt_t> range(flat_stmt_list list) const noexcept {
-        return std::span(statements_).subspan(list.first_.i, list.size());
-    }
-
-    constexpr const flat_stmt_t& operator[](flat_stmt_ptr ptr) const noexcept { return statements_[ptr.i]; }
-    constexpr const flat_expr_t& operator[](flat_expr_ptr ptr) const noexcept { return expressions_[ptr.i]; }
-
-    Statements statements_;
-    Expressions expressions_;
-
-    flat_stmt_list root_block_;
-};
-
-using flat_program = basic_flat_program<std::vector<flat_stmt_t>, std::vector<flat_expr_t>>;
-
-template <std::size_t M, std::size_t N>
-struct static_program : basic_flat_program<std::array<flat_stmt_t, M>, std::array<flat_expr_t, N>> { };
-
 class serializer {
 public:
     constexpr serializer(std::span<const stmt_ptr> input)
         : input_(input) { }
 
-    constexpr flat_program serialize() && {
+    constexpr flat_ast serialize() && {
         flat_stmt_list root_block = reserve_block(input_.size());
 
         for (auto [ptr, statement] : std::views::zip(root_block, input_)) {
             put_stmt(ptr, statement->visit(*this));
         }
 
-        return flat_program {
+        return flat_ast {
             std::move(statements_),
             std::move(expressions_),
             root_block,
@@ -143,8 +121,7 @@ private:
             .last_ { statements_.size() + count },
         };
 
-        // Use flat_expression_stmt (implicit `.expression_ = flat_nullptr`) as a placeholder.
-        statements_.insert(statements_.end(), count, flat_expression_stmt {});
+        statements_.resize(statements_.size() + count);
 
         return block;
     }
@@ -154,8 +131,7 @@ private:
     constexpr flat_expr_ptr reserve_expr() {
         flat_expr_ptr ptr(expressions_.size());
 
-        // Use flat_literal_expr (implicit `.literal_ = none`) as a placeholder.
-        expressions_.push_back(flat_literal_expr {});
+        expressions_.emplace_back();
 
         return ptr;
     }
@@ -168,32 +144,32 @@ private:
     std::vector<flat_expr_t> expressions_;
 };
 
-constexpr flat_program serialize(std::span<const stmt_ptr> input) { return serializer(input).serialize(); }
+constexpr flat_ast serialize(std::span<const stmt_ptr> input) { return serializer(input).serialize(); }
 
 template <typename Gen>
-concept program_generator = requires(Gen gen) {
+concept ast_generator = requires(Gen gen) {
     { gen() } -> std::convertible_to<std::span<const stmt_ptr>>;
 };
 
-template <program_generator auto gen>
+template <ast_generator auto gen>
 constexpr auto static_serialize() {
     constexpr std::pair<std::size_t, std::size_t> sizes = [] {
-        const auto program = serialize(gen());
-        return std::pair { program.statements_.size(), program.expressions_.size() };
+        const auto ast = serialize(gen());
+        return std::pair { ast.statements_.size(), ast.expressions_.size() };
     }();
 
     constexpr std::size_t M = sizes.first;
     constexpr std::size_t N = sizes.second;
 
-    return []() -> static_program<M, N> {
-        const auto flat_program = serialize(gen());
+    return []() -> static_ast<M, N> {
+        const auto flat_ast = serialize(gen());
 
-        static_program<M, N> static_program;
-        std::ranges::copy(flat_program.statements_, static_program.statements_.begin());
-        std::ranges::copy(flat_program.expressions_, static_program.expressions_.begin());
-        static_program.root_block_ = flat_program.root_block_;
+        static_ast<M, N> static_ast;
+        std::ranges::copy(flat_ast.statements_, static_ast.statements_.begin());
+        std::ranges::copy(flat_ast.expressions_, static_ast.expressions_.begin());
+        static_ast.root_block_ = flat_ast.root_block_;
 
-        return static_program;
+        return static_ast;
     }();
 }
 

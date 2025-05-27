@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctlox/v2/expression.hpp>
-#include <ctlox/v2/flat.hpp>
+#include <ctlox/v2/flat_ptr.hpp>
 #include <ctlox/v2/token.hpp>
 
 #include <memory>

@@ -1,0 +1,34 @@
+#pragma once
+
+#include <ctlox/v2/expression.hpp>
+#include <ctlox/v2/statement.hpp>
+
+#include <array>
+#include <span>
+#include <vector>
+
+namespace ctlox::v2 {
+
+template <typename Statements, typename Expressions>
+struct basic_flat_ast {
+    constexpr std::span<const flat_stmt_t> root_range() const noexcept { return range(root_block_); }
+
+    constexpr std::span<const flat_stmt_t> range(flat_stmt_list list) const noexcept {
+        return std::span(statements_).subspan(list.first_.i, list.size());
+    }
+
+    constexpr const flat_stmt_t& operator[](flat_stmt_ptr ptr) const noexcept { return statements_[ptr.i]; }
+    constexpr const flat_expr_t& operator[](flat_expr_ptr ptr) const noexcept { return expressions_[ptr.i]; }
+
+    Statements statements_;
+    Expressions expressions_;
+
+    flat_stmt_list root_block_;
+};
+
+using flat_ast = basic_flat_ast<std::vector<flat_stmt_t>, std::vector<flat_expr_t>>;
+
+template <std::size_t M, std::size_t N>
+struct static_ast : basic_flat_ast<std::array<flat_stmt_t, M>, std::array<flat_expr_t, N>> { };
+
+}  // namespace ctlox::v2
