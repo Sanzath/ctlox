@@ -11,36 +11,36 @@
 namespace ctlox::v2 {
 
 class stmt_t;
-using stmt_ptr_t = std::unique_ptr<stmt_t>;
-using stmt_list_t = std::vector<stmt_ptr_t>;
+using stmt_ptr = std::unique_ptr<stmt_t>;
+using stmt_list = std::vector<stmt_ptr>;
 
 class flat_stmt_t;
-using flat_stmt_ptr_t = flat_ptr_t<flat_stmt_t>;
-using flat_stmt_list_t = flat_list_t<flat_stmt_t>;
+using flat_stmt_ptr = flat_ptr<flat_stmt_t>;
+using flat_stmt_list = flat_list<flat_stmt_t>;
 
 template <typename StmtList>
 struct basic_block_stmt {
     StmtList statements_;
 };
 
-using block_stmt = basic_block_stmt<stmt_list_t>;
-using flat_block_stmt = basic_block_stmt<flat_stmt_list_t>;
+using block_stmt = basic_block_stmt<stmt_list>;
+using flat_block_stmt = basic_block_stmt<flat_stmt_list>;
 
 template <typename ExprPtr>
 struct basic_expression_stmt {
     ExprPtr expression_;
 };
 
-using expression_stmt = basic_expression_stmt<expr_ptr_t>;
-using flat_expression_stmt = basic_expression_stmt<flat_expr_ptr_t>;
+using expression_stmt = basic_expression_stmt<expr_ptr>;
+using flat_expression_stmt = basic_expression_stmt<flat_expr_ptr>;
 
 template <typename ExprPtr>
 struct basic_print_stmt {
     ExprPtr expression_;
 };
 
-using print_stmt = basic_print_stmt<expr_ptr_t>;
-using flat_print_stmt = basic_print_stmt<flat_expr_ptr_t>;
+using print_stmt = basic_print_stmt<expr_ptr>;
+using flat_print_stmt = basic_print_stmt<flat_expr_ptr>;
 
 template <typename ExprPtr>
 struct basic_var_stmt {
@@ -48,8 +48,8 @@ struct basic_var_stmt {
     ExprPtr initializer_;
 };
 
-using var_stmt = basic_var_stmt<expr_ptr_t>;
-using flat_var_stmt = basic_var_stmt<flat_expr_ptr_t>;
+using var_stmt = basic_var_stmt<expr_ptr>;
+using flat_var_stmt = basic_var_stmt<flat_expr_ptr>;
 
 template <typename StmtList, typename ExprPtr>
 class basic_stmt_t {
@@ -87,19 +87,19 @@ public:
 
 // These types need to be defined as a classes rather than aliases so that
 // they can refer to themselves through their pointer types.
-class stmt_t : public basic_stmt_t<stmt_list_t, expr_ptr_t> {
+class stmt_t : public basic_stmt_t<stmt_list, expr_ptr> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~stmt_t() noexcept = default;
 };
-class flat_stmt_t : public basic_stmt_t<flat_stmt_list_t, flat_expr_ptr_t> {
+class flat_stmt_t : public basic_stmt_t<flat_stmt_list, flat_expr_ptr> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~flat_stmt_t() noexcept = default;
 };
 
 template <typename Stmt>
-constexpr stmt_ptr_t make_stmt(Stmt&& stmt) {
+constexpr stmt_ptr make_stmt(Stmt&& stmt) {
     return std::make_unique<stmt_t>(std::forward<Stmt>(stmt));
 }
 

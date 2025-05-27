@@ -14,8 +14,8 @@ public:
     constexpr explicit parser(std::span<const token_t> tokens)
         : tokens_(tokens) { }
 
-    constexpr std::vector<stmt_ptr_t> parse() && {
-        std::vector<stmt_ptr_t> statements;
+    constexpr std::vector<stmt_ptr> parse() && {
+        std::vector<stmt_ptr> statements;
         while (!at_end()) {
             statements.push_back(declaration());
         }
@@ -33,16 +33,16 @@ private:
         return matches;
     }
 
-    constexpr expr_ptr_t expression() { return assignment(); }
+    constexpr expr_ptr expression() { return assignment(); }
 
-    constexpr stmt_ptr_t declaration() {
+    constexpr stmt_ptr declaration() {
         if (match(token_type::_var))
             return var_declaration();
 
         return statement();
     }
 
-    constexpr stmt_ptr_t statement() {
+    constexpr stmt_ptr statement() {
         if (match(token_type::_print))
             return print_statement();
         if (match(token_type::left_brace))
@@ -51,16 +51,16 @@ private:
         return expression_statement();
     }
 
-    constexpr stmt_ptr_t print_statement() {
-        expr_ptr_t expr = expression();
+    constexpr stmt_ptr print_statement() {
+        expr_ptr expr = expression();
         consume(token_type::semicolon, "Expect ',' after value.");
         return make_stmt(print_stmt { .expression_ = std::move(expr) });
     }
 
-    constexpr stmt_ptr_t var_declaration() {
+    constexpr stmt_ptr var_declaration() {
         token_t name = consume(token_type::identifier, "Expect variable name.");
 
-        expr_ptr_t initializer;
+        expr_ptr initializer;
         if (match(token_type::equal)) {
             initializer = expression();
         }
@@ -69,14 +69,14 @@ private:
         return make_stmt(var_stmt { .name_ = name, .initializer_ = std::move(initializer) });
     }
 
-    constexpr stmt_ptr_t expression_statement() {
-        expr_ptr_t expr = expression();
+    constexpr stmt_ptr expression_statement() {
+        expr_ptr expr = expression();
         consume(token_type::semicolon, "Expect ',' after expression.");
         return make_stmt(expression_stmt { .expression_ = std::move(expr) });
     }
 
-    constexpr std::vector<stmt_ptr_t> block() {
-        std::vector<stmt_ptr_t> statements;
+    constexpr std::vector<stmt_ptr> block() {
+        std::vector<stmt_ptr> statements;
 
         while (!check(token_type::right_brace) && !at_end()) {
             statements.push_back(declaration());
@@ -86,12 +86,12 @@ private:
         return statements;
     }
 
-    constexpr expr_ptr_t assignment() {
-        expr_ptr_t expr = equality();
+    constexpr expr_ptr assignment() {
+        expr_ptr expr = equality();
 
         if (match(token_type::equal)) {
             // token_t equals = previous();
-            expr_ptr_t value = assignment();
+            expr_ptr value = assignment();
 
             if (const auto* var_expr = expr->get_if<variable_expr>()) {
                 token_t name = var_expr->name_;
@@ -104,12 +104,12 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t equality() {
-        expr_ptr_t expr = comparison();
+    constexpr expr_ptr equality() {
+        expr_ptr expr = comparison();
 
         while (match(token_type::bang_equal, token_type::equal_equal)) {
             token_t oper = previous();
-            expr_ptr_t right = comparison();
+            expr_ptr right = comparison();
 
             expr = make_expr(
                 binary_expr {
@@ -122,12 +122,12 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t comparison() {
-        expr_ptr_t expr = term();
+    constexpr expr_ptr comparison() {
+        expr_ptr expr = term();
 
         while (match(token_type::greater, token_type::greater_equal, token_type::less, token_type::less_equal)) {
             token_t oper = previous();
-            expr_ptr_t right = term();
+            expr_ptr right = term();
 
             expr = make_expr(
                 binary_expr {
@@ -140,12 +140,12 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t term() {
-        expr_ptr_t expr = factor();
+    constexpr expr_ptr term() {
+        expr_ptr expr = factor();
 
         while (match(token_type::minus, token_type::plus)) {
             token_t oper = previous();
-            expr_ptr_t right = factor();
+            expr_ptr right = factor();
 
             expr = make_expr(
                 binary_expr {
@@ -158,12 +158,12 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t factor() {
-        expr_ptr_t expr = unary();
+    constexpr expr_ptr factor() {
+        expr_ptr expr = unary();
 
         while (match(token_type::slash, token_type::star)) {
             token_t oper = previous();
-            expr_ptr_t right = unary();
+            expr_ptr right = unary();
 
             expr = make_expr(
                 binary_expr {
@@ -176,12 +176,12 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t unary() {
-        expr_ptr_t expr;
+    constexpr expr_ptr unary() {
+        expr_ptr expr;
 
         if (match(token_type::bang, token_type::minus)) {
             token_t oper = previous();
-            expr_ptr_t right = unary();
+            expr_ptr right = unary();
 
             expr = make_expr(unary_expr { .operator_ = oper, .right_ = std::move(right) });
         } else {
@@ -191,7 +191,7 @@ private:
         return expr;
     }
 
-    constexpr expr_ptr_t primary() {
+    constexpr expr_ptr primary() {
         if (match(token_type::_false, token_type::_true, token_type::_nil, token_type::number, token_type::string)) {
             return make_expr(literal_expr { .value_ = previous().literal_ });
         }
@@ -201,7 +201,7 @@ private:
         }
 
         if (match(token_type::left_paren)) {
-            expr_ptr_t expr = expression();
+            expr_ptr expr = expression();
             consume(token_type::right_paren, "Expect ')' after expression.");
 
             return make_expr(grouping_expr { .expr_ = std::move(expr) });
@@ -241,6 +241,6 @@ private:
     int current_ = 0;
 };
 
-constexpr std::vector<stmt_ptr_t> parse(std::span<const token_t> tokens) { return parser(tokens).parse(); }
+constexpr std::vector<stmt_ptr> parse(std::span<const token_t> tokens) { return parser(tokens).parse(); }
 
 }  // namespace ctlox::v2

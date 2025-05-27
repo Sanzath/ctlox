@@ -6,6 +6,8 @@
 
 namespace test_v2::test_flattener {
 
+
+
 constexpr bool scratch_tests() {
     using namespace ctlox::v2;
 
@@ -20,6 +22,15 @@ print foo;
 )";
 
     const auto flat_tree = flatten(parse(scan(source)));
+
+    for (const auto& statement : flat_tree.root_range()) {
+        if (auto* var_stmt = statement.get_if<flat_var_stmt>()) {
+            flat_tree[var_stmt->initializer_].visit([](const flat_expr_t&) { });
+        }
+        else if (auto* block_stmt = statement.get_if<flat_block_stmt>()) {
+            flat_tree.range(block_stmt->statements_);
+        }
+    }
 
     expect(flat_tree.root_block_.first_.i == 0);
     expect(flat_tree.root_block_.last_.i == 3);

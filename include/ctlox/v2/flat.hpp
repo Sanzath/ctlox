@@ -6,35 +6,32 @@
 namespace ctlox::v2 {
 
 template <typename T>
-struct flat_ptr_t final {
+struct flat_ptr final {
     std::size_t i = std::numeric_limits<std::size_t>::max();
 
-    constexpr bool operator==(const flat_ptr_t& other) const noexcept = default;
+    constexpr bool operator==(const flat_ptr& other) const noexcept = default;
 };
 
 struct flat_nullptr_t final {
     template <typename T>
-    constexpr operator flat_ptr_t<T>() const {
-        return flat_ptr_t<T> {};
+    constexpr operator flat_ptr<T>() const {
+        return flat_ptr<T> {};
     }
 };
 
 constexpr flat_nullptr_t flat_nullptr;
 
 template <typename T>
-struct flat_list_t final {
-    flat_ptr_t<T> first_;
-    flat_ptr_t<T> last_;
+struct flat_list final {
+    flat_ptr<T> first_;
+    flat_ptr<T> last_;
 
     struct const_iterator final {
         using difference_type = std::ptrdiff_t;
-        using value_type = const flat_ptr_t<T>;
-        using pointer = const flat_ptr_t<T>*;
-        using reference = const flat_ptr_t<T>&;
-        using iterator_category = std::forward_iterator_tag;
+        using value_type = const flat_ptr<T>;
+        using iterator_concept = std::forward_iterator_tag;
 
-        constexpr reference operator*() const noexcept { return ptr_; }
-        constexpr pointer operator->() const noexcept { return &ptr_; }
+        constexpr value_type operator*() const noexcept { return ptr_; }
 
         constexpr const_iterator& operator++() noexcept {
             ++ptr_.i;
@@ -49,13 +46,13 @@ struct flat_list_t final {
 
         constexpr bool operator==(const const_iterator& other) const noexcept = default;
 
-        flat_ptr_t<T> ptr_;
+        flat_ptr<T> ptr_;
     };
 
     constexpr const_iterator begin() const noexcept { return const_iterator { first_ }; }
     constexpr const_iterator end() const noexcept { return const_iterator { last_ }; }
 };
 
-static_assert(std::forward_iterator<typename flat_list_t<int>::const_iterator>);
+static_assert(std::forward_iterator<typename flat_list<int>::const_iterator>);
 
 }  // namespace ctlox::v2

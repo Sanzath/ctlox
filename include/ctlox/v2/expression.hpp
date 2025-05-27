@@ -9,10 +9,10 @@
 namespace ctlox::v2 {
 
 class expr_t;
-using expr_ptr_t = std::unique_ptr<expr_t>;
+using expr_ptr = std::unique_ptr<expr_t>;
 
 class flat_expr_t;
-using flat_expr_ptr_t = flat_ptr_t<flat_expr_t>;
+using flat_expr_ptr = flat_ptr<flat_expr_t>;
 
 template <typename ExprPtr>
 struct basic_assign_expr {
@@ -20,8 +20,8 @@ struct basic_assign_expr {
     ExprPtr value_;
 };
 
-using assign_expr = basic_assign_expr<expr_ptr_t>;
-using flat_assign_expr = basic_assign_expr<flat_expr_ptr_t>;
+using assign_expr = basic_assign_expr<expr_ptr>;
+using flat_assign_expr = basic_assign_expr<flat_expr_ptr>;
 
 template <typename ExprPtr>
 struct basic_binary_expr {
@@ -30,16 +30,16 @@ struct basic_binary_expr {
     ExprPtr right_;
 };
 
-using binary_expr = basic_binary_expr<expr_ptr_t>;
-using flat_binary_expr = basic_binary_expr<flat_expr_ptr_t>;
+using binary_expr = basic_binary_expr<expr_ptr>;
+using flat_binary_expr = basic_binary_expr<flat_expr_ptr>;
 
 template <typename ExprPtr>
 struct basic_grouping_expr {
     ExprPtr expr_;
 };
 
-using grouping_expr = basic_grouping_expr<expr_ptr_t>;
-using flat_grouping_expr = basic_grouping_expr<flat_expr_ptr_t>;
+using grouping_expr = basic_grouping_expr<expr_ptr>;
+using flat_grouping_expr = basic_grouping_expr<flat_expr_ptr>;
 
 struct basic_literal_expr {
     literal_t value_;
@@ -54,8 +54,8 @@ struct basic_unary_expr {
     ExprPtr right_;
 };
 
-using unary_expr = basic_unary_expr<expr_ptr_t>;
-using flat_unary_expr = basic_unary_expr<flat_expr_ptr_t>;
+using unary_expr = basic_unary_expr<expr_ptr>;
+using flat_unary_expr = basic_unary_expr<flat_expr_ptr>;
 
 struct basic_variable_expr {
     token_t name_;
@@ -102,19 +102,19 @@ public:
 
 // These types need to be defined as a classes rather than aliases so that
 // they can refer to themselves through their pointer types.
-class expr_t : public basic_expr_t<expr_ptr_t> {
+class expr_t : public basic_expr_t<expr_ptr> {
 public:
     using basic_expr_t::basic_expr_t;
     constexpr ~expr_t() noexcept = default;
 };
-class flat_expr_t : public basic_expr_t<flat_expr_ptr_t> {
+class flat_expr_t : public basic_expr_t<flat_expr_ptr> {
 public:
     using basic_expr_t::basic_expr_t;
     constexpr ~flat_expr_t() noexcept = default;
 };
 
 template <typename Expr>
-constexpr expr_ptr_t make_expr(Expr&& expr) {
+constexpr expr_ptr make_expr(Expr&& expr) {
     return std::make_unique<expr_t>(std::forward<Expr>(expr));
 }
 
