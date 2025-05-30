@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ctlox/v2/runtime_error.hpp>
+#include <ctlox/v2/exception.hpp>
 #include <ctlox/v2/types.hpp>
 
 #include <utility>

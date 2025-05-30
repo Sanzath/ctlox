@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctlox/v2/exception.hpp>
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/statement.hpp>
 #include <ctlox/v2/token.hpp>
@@ -90,14 +91,14 @@ private:
         expr_ptr expr = equality();
 
         if (match(token_type::equal)) {
-            // token_t equals = previous();
+            token_t equals = previous();
             expr_ptr value = assignment();
 
             if (const auto* var_expr = expr->get_if<variable_expr>()) {
                 token_t name = var_expr->name_;
                 expr = make_expr(assign_expr { .name_ = name, .value_ = std::move(value) });
             } else {
-                throw std::invalid_argument("Invalid assignment target.");
+                throw parse_error(equals, "Invalid assignment target.");
             }
         }
 
@@ -207,14 +208,14 @@ private:
             return make_expr(grouping_expr { .expr_ = std::move(expr) });
         }
 
-        throw std::invalid_argument("Expect expression.");
+        throw parse_error(peek(), "Expect expression.");
     }
 
-    constexpr token_t consume(token_type type, std::string_view message) {
+    constexpr token_t consume(token_type type, const char* message) {
         if (check(type))
             return advance();
 
-        throw std::invalid_argument(std::string(message));
+        throw parse_error(peek(), message);
     }
 
     [[nodiscard]] constexpr bool check(token_type type) const {
@@ -233,9 +234,9 @@ private:
 
     [[nodiscard]] constexpr bool at_end() const { return peek().type_ == token_type::eof; }
 
-    [[nodiscard]] constexpr token_t peek() const { return tokens_[current_]; }
+    [[nodiscard]] constexpr const token_t& peek() const { return tokens_[current_]; }
 
-    [[nodiscard]] constexpr token_t previous() const { return tokens_[current_ - 1]; }
+    [[nodiscard]] constexpr const token_t& previous() const { return tokens_[current_ - 1]; }
 
     std::span<const token_t> tokens_;
     int current_ = 0;

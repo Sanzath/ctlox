@@ -2,9 +2,9 @@
 
 #include <ctlox/common/characters.hpp>
 #include <ctlox/common/numbers.hpp>
+#include <ctlox/v2/exception.hpp>
 #include <ctlox/v2/token.hpp>
 
-#include <stdexcept>
 #include <vector>
 
 namespace ctlox::v2 {
@@ -104,7 +104,7 @@ private:
                 //       Canonical Lox reports to a global and continues.
                 //       Just throwing here means only one scan error
                 //       will be reported...
-                throw std::invalid_argument("Invalid character");
+                throw scan_error(line_, "Invalid character");
             }
             break;
         }
@@ -152,6 +152,7 @@ private:
     }
 
     constexpr void string() {
+        int start_line = line_;
         while (peek() != '"' && !at_end()) {
             if (peek() == '\n')
                 ++line_;
@@ -159,7 +160,7 @@ private:
         }
 
         if (at_end()) {
-            throw std::invalid_argument("Unterminated string");
+            throw scan_error(start_line, "Unterminated string");
         }
 
         advance();
