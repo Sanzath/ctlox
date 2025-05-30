@@ -98,15 +98,11 @@ private:
     static constexpr auto generate_block() {
         constexpr auto index_sequence = std::make_index_sequence<stmts.size()> {};
 
-        // create a tuple from the statements
-        auto block_tuple = []<std::size_t... I>(std::index_sequence<I...>) {
-            return std::tuple { visit<stmts[I]>()... };
+        return []<std::size_t... I>(std::index_sequence<I...>){
+            return [...stmt = visit<stmts[I]>()](program_state& state) -> void {
+                (stmt(state), ...);
+            };
         }(index_sequence);
-
-        return [=](program_state& state) -> void {
-            // call each statement in that tuple
-            std::apply([&state](auto&&... stmt) { (stmt(state), ...); }, block_tuple);
-        };
     }
 
     template <flat_stmt_ptr ptr>
@@ -131,7 +127,7 @@ private:
     template <const flat_expression_stmt& stmt>
     static constexpr auto generate_stmt() {
         auto expr = visit<stmt.expression_>();
-        return [=](program_state& state) -> void { static_cast<void>(expr(state)); };
+        return [=](program_state& state) -> void { expr(state); };
     }
 
     template <const flat_print_stmt& stmt>
