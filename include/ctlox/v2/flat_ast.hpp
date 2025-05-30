@@ -11,12 +11,6 @@ namespace ctlox::v2 {
 
 template <typename Statements, typename Expressions>
 struct basic_flat_ast {
-    constexpr std::span<const flat_stmt_t> root_range() const noexcept { return range(root_block_); }
-
-    constexpr std::span<const flat_stmt_t> range(flat_stmt_list list) const noexcept {
-        return std::span(statements_).subspan(list.first_.i, list.size());
-    }
-
     constexpr const flat_stmt_t& operator[](flat_stmt_ptr ptr) const noexcept { return statements_[ptr.i]; }
     constexpr const flat_expr_t& operator[](flat_expr_ptr ptr) const noexcept { return expressions_[ptr.i]; }
 
