@@ -1,9 +1,8 @@
 #pragma once
 
 #include <ctlox/common/token_type.hpp>
-#include <ctlox/v2/literal.hpp>
+#include <ctlox/v2/types.hpp>
 
-#include <format>
 #include <string_view>
 
 namespace ctlox::v2 {

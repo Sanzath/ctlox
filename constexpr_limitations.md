@@ -41,3 +41,42 @@ an undefined symbol.
 
 Constructing a span from the vector and iterating over that span resolves 
 the problem.
+
+### variable template parameter `const auto&`
+
+[TODO: describe problem]
+
+```c++
+template <const auto& v>
+constexpr const auto& foo() noexcept {
+    return v.bar;
+}
+
+template <const auto& v>
+constexpr const auto& foo_v = foo<v>;  // fails with MSVC
+
+// semi-workaround: separate the template parameter from the function, i.e.
+
+template <const auto& v>
+struct fooer {
+    static constexpr const auto& foo() noexcept {
+        return v.bar;
+    }
+};
+
+template <const auto& v>
+constexpr const auto& foo_v = fooer<v>::foo();  // succeeds with MSVC, sometimes
+
+// just using fooer<v>::foo() directly does work though
+```
+
+### recursion in `<const T& value>` templates
+
+MSVC generates:
+```
+C:\_\Code\C++2\ctlox\include\ctlox/v2/code_generator.hpp(140): error C3779: 'ctlox::v2::code_generator<ctlox::v2::static_ast<17,15> const `bool __cdecl test_v2::test_code_generator::depth_test(void)'::`2'::ast>::generate_block': a function that returns 'auto' cannot be used before it is defined
+```
+
+This can happen when a lox program has a block statement which contains a block statement.
+
+No workaround found at this point.

@@ -71,7 +71,7 @@ private:
 
     constexpr stmt_ptr expression_statement() {
         expr_ptr expr = expression();
-        consume(token_type::semicolon, "Expect ',' after expression.");
+        consume(token_type::semicolon, "Expect ';' after expression.");
         return make_stmt(expression_stmt { .expression_ = std::move(expr) });
     }
 

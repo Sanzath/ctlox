@@ -8,4 +8,6 @@
 // clang-format on
 
 namespace ctlox::v2 {
+// template <string source>
+// constexpr auto compile();
 }

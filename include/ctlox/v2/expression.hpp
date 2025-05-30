@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ctlox/v2/flat_ptr.hpp>
+#include <ctlox/v2/static_visit.hpp>
 #include <ctlox/v2/token.hpp>
 
 #include <memory>
@@ -79,7 +80,7 @@ class basic_expr_t {
 public:
     template <typename Expr>
         requires std::constructible_from<variant_t, Expr&&>
-    constexpr basic_expr_t(Expr&& expr) noexcept
+    constexpr basic_expr_t(Expr&& expr) noexcept  // NOLINT(*-explicit-constructor)
         : expr_(std::forward<Expr>(expr)) { }
 
     constexpr basic_expr_t() noexcept
@@ -100,6 +101,11 @@ public:
     template <typename Expr>
     [[nodiscard]] constexpr const Expr* get_if() const noexcept {
         return std::get_if<Expr>(&expr_);
+    }
+
+    template <const auto& expr>
+    [[nodiscard]] static constexpr const auto& static_visit() noexcept {
+        return static_visit_v<expr.expr_>;
     }
 };
 

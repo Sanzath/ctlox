@@ -2,6 +2,7 @@
 
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/flat_ptr.hpp>
+#include <ctlox/v2/static_visit.hpp>
 #include <ctlox/v2/token.hpp>
 
 #include <memory>
@@ -64,7 +65,7 @@ class basic_stmt_t {
 public:
     template <typename Stmt>
         requires std::constructible_from<variant_t, Stmt&&>
-    constexpr basic_stmt_t(Stmt&& stmt) noexcept
+    constexpr basic_stmt_t(Stmt&& stmt) noexcept  // NOLINT(*-explicit-constructor)
         : stmt_(std::forward<Stmt>(stmt)) { }
 
     constexpr basic_stmt_t() noexcept
@@ -85,6 +86,11 @@ public:
     template <typename Stmt>
     [[nodiscard]] constexpr const Stmt* get_if() const noexcept {
         return std::get_if<Stmt>(&stmt_);
+    }
+
+    template <const auto& stmt>
+    static constexpr const auto& static_visit() noexcept {
+        return static_visit_v<stmt.stmt_>;
     }
 };
 

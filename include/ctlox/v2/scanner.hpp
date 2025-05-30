@@ -4,6 +4,7 @@
 #include <ctlox/common/numbers.hpp>
 #include <ctlox/v2/token.hpp>
 
+#include <stdexcept>
 #include <vector>
 
 namespace ctlox::v2 {
