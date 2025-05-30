@@ -1,6 +1,7 @@
 #pragma once
 
 // clang-format off
+#include <ctlox/common/string.hpp>
 #include <ctlox/v2/scanner.hpp>
 #include <ctlox/v2/parser.hpp>
 #include <ctlox/v2/serializer.hpp>
@@ -8,6 +9,12 @@
 // clang-format on
 
 namespace ctlox::v2 {
-// template <string source>
-// constexpr auto compile();
+
+template <string source>
+constexpr auto compile() {
+    constexpr auto generate_ast = [] { return parse(scan(source)); };
+    static constexpr auto ast = static_serialize<generate_ast>();
+    return generate_code<ast>();
 }
+
+}  // namespace ctlox::v2
