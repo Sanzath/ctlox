@@ -161,11 +161,29 @@ struct code_generator : _code_generator_base {
 private:
     template <flat_stmt_list stmts>
     static constexpr auto visit() {
-        using index_sequence = std::make_index_sequence<stmts.size()>;
+        // Allow for larger blocks without increasing -fbracket-depth
+        // by (potentially recursively) chunking the block into two smaller blocks
+        if constexpr (stmts.size() > 256) {
+            constexpr flat_stmt_ptr middle = stmts[stmts.size() / 2];
 
-        return []<std::size_t... I>(std::index_sequence<I...>) {
-            return [](program_state auto& state) static -> void { (visit_t<stmts[I]> {}(state), ...); };
-        }(index_sequence {});
+            constexpr flat_stmt_list left { .first_ = stmts.first_, .last_ = middle };
+            constexpr flat_stmt_list right { .first_ = middle, .last_ = stmts.last_ };
+
+            using left_block = decltype(visit<left>());
+            using right_block = decltype(visit<right>());
+            return [](program_state auto& state) static -> void {
+                left_block {}(state);
+                right_block {}(state);
+            };
+        }
+
+        else {
+            using index_sequence = std::make_index_sequence<stmts.size()>;
+
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return [](program_state auto& state) static -> void { (visit_t<stmts[I]> {}(state), ...); };
+            }(index_sequence {});
+        }
     }
 
     template <flat_stmt_ptr ptr>
