@@ -23,6 +23,11 @@ print 0.1 + 0.2;  // 0.30000000000000004 :)
 print 1 > 2;
 print nil or "zim" or false;
 
+var str = "";
+for (var i = 0; i < 100; i = i + 1) {
+    print str;
+    str = str + ".";
+}
 // print 1 > false;  // throws a ctlox::runtime_error
 )"_lox;
 
