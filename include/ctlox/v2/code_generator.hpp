@@ -150,21 +150,21 @@ template <const auto& ast>
     requires _flat_ast<decltype(ast)>
 struct code_generator : _code_generator_base {
     static constexpr auto generate() {
-        auto root_block = generate_block<ast.root_block_>();
-        return [=]<typename PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
+        using root_block = visit_t<ast.root_block_>;
+        return []<typename PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
             program_state_t state(std::move(print_fn));
 
-            root_block(state);
+            root_block {}(state);
         };
     }
 
 private:
-    template <const flat_stmt_list& stmts>
-    static constexpr auto generate_block() {
+    template <flat_stmt_list stmts>
+    static constexpr auto visit() {
         using index_sequence = std::make_index_sequence<stmts.size()>;
 
         return []<std::size_t... I>(std::index_sequence<I...>) {
-            return [... stmt = visit<stmts[I]>()](program_state auto& state) -> void { (stmt(state), ...); };
+            return [](program_state auto& state) static -> void { (visit_t<stmts[I]> {}(state), ...); };
         }(index_sequence {});
     }
 
@@ -178,42 +178,45 @@ private:
         return generate_expr<static_visit_v<ast[ptr]>>();
     }
 
+    template <auto ptr>
+    using visit_t = decltype(visit<ptr>());
+
     template <const flat_block_stmt& stmt>
     static constexpr auto generate_stmt() {
-        auto block = generate_block<stmt.statements_>();
-        return [=](program_state auto& state) -> void {
+        using block = visit_t<stmt.statements_>;
+        return [](program_state auto& state) static -> void {
             program_state auto block_state = state.open_scope();
-            block(block_state);
+            block {}(block_state);
         };
     }
 
     template <const flat_expression_stmt& stmt>
     static constexpr auto generate_stmt() {
-        auto expr = visit<stmt.expression_>();
-        return [=](program_state auto& state) -> void { expr(state); };
+        using expr = visit_t<stmt.expression_>;
+        return [](program_state auto& state) static -> void { expr {}(state); };
     }
 
     template <const flat_if_stmt& stmt>
     static constexpr auto generate_stmt() {
-        auto condition = visit<stmt.condition_>();
-        auto then_branch = visit<stmt.then_branch_>();
+        using condition = visit_t<stmt.condition_>;
+        using then_branch = visit_t<stmt.then_branch_>;
 
         if constexpr (stmt.else_branch_ != flat_nullptr) {
-            auto else_branch = visit<stmt.else_branch_>();
+            using else_branch = visit_t<stmt.else_branch_>;
 
-            return [=](program_state auto& state) -> void {
-                if (is_truthy(condition(state))) {
-                    then_branch(state);
+            return [](program_state auto& state) static -> void {
+                if (is_truthy(condition {}(state))) {
+                    then_branch {}(state);
                 } else {
-                    else_branch(state);
+                    else_branch {}(state);
                 }
             };
         }
 
         else {
-            return [=](program_state auto& state) -> void {
-                if (is_truthy(condition(state))) {
-                    then_branch(state);
+            return [](program_state auto& state) static -> void {
+                if (is_truthy(condition {}(state))) {
+                    then_branch {}(state);
                 }
             };
         }
@@ -221,25 +224,27 @@ private:
 
     template <const flat_print_stmt& stmt>
     static constexpr auto generate_stmt() {
-        auto expr = visit<stmt.expression_>();
-        return [=](program_state auto& state) -> void { state.print(expr(state)); };
+        using expr = visit_t<stmt.expression_>;
+        return [](program_state auto& state) static -> void { state.print(expr {}(state)); };
     }
 
     template <const flat_var_stmt& stmt>
     static constexpr auto generate_stmt() {
         if constexpr (stmt.initializer_ != flat_nullptr) {
-            auto expr = visit<stmt.initializer_>();
-            return [=](program_state auto& state) -> void { state.define_var(stmt.name_, expr(state)); };
-        } else {
-            return [=](program_state auto& state) -> void { state.define_var(stmt.name_, nil); };
+            using expr = visit_t<stmt.initializer_>;
+            return [](program_state auto& state) static -> void { state.define_var(stmt.name_, expr {}(state)); };
+        }
+
+        else {
+            return [](program_state auto& state) static -> void { state.define_var(stmt.name_, nil); };
         }
     }
 
     template <const flat_assign_expr& expr>
     static constexpr auto generate_expr() {
-        auto right = visit<expr.value_>();
-        return [=](program_state auto& state) -> value_t {
-            auto value = right(state);
+        using right = visit_t<expr.value_>;
+        return [](program_state auto& state) static -> value_t {
+            value_t value = right {}(state);
             state.assign_var(expr.name_, value);
             return value;
         };
@@ -247,34 +252,34 @@ private:
 
     template <const flat_binary_expr& expr>
     static constexpr auto generate_expr() {
-        auto left = visit<expr.left_>();
-        auto right = visit<expr.right_>();
+        using left = visit_t<expr.left_>;
+        using right = visit_t<expr.right_>;
 
         constexpr token_type type = expr.operator_.type_;
-        constexpr auto number_op = number_op_for<type>();
-        constexpr auto value_op = value_op_for<type>();
+        using number_op = decltype(number_op_for<type>());
+        using value_op = decltype(value_op_for<type>());
 
-        if constexpr (number_op != none) {
-            return [=](program_state auto& state) -> value_t {
-                value_t lhs = left(state);
-                value_t rhs = right(state);
+        if constexpr (number_op {} != none) {
+            return [](program_state auto& state) static -> value_t {
+                value_t lhs = left {}(state);
+                value_t rhs = right {}(state);
                 auto [lhs_number, rhs_number] = check_number_operands<expr.operator_>(lhs, rhs);
-                return number_op(lhs_number, rhs_number);
+                return number_op {}(lhs_number, rhs_number);
             };
         }
 
-        else if constexpr (value_op != none) {
-            return [=](program_state auto& state) -> value_t {
-                value_t lhs = left(state);
-                value_t rhs = right(state);
-                return value_op(lhs, rhs);
+        else if constexpr (value_op {} != none) {
+            return [](program_state auto& state) static -> value_t {
+                value_t lhs = left {}(state);
+                value_t rhs = right {}(state);
+                return value_op {}(lhs, rhs);
             };
         }
 
         else if constexpr (type == token_type::plus) {
-            return [=](program_state auto& state) -> value_t {
-                value_t lhs = left(state);
-                value_t rhs = right(state);
+            return [](program_state auto& state) static -> value_t {
+                value_t lhs = left {}(state);
+                value_t rhs = right {}(state);
 
                 if (auto [left, right] = std::pair(std::get_if<std::string>(&lhs), std::get_if<std::string>(&rhs));
                     left && right) {
@@ -303,42 +308,42 @@ private:
     static constexpr auto generate_expr() {
         static_assert(!std::holds_alternative<none_t>(expr.value_));
 
-        return [=](program_state auto&) -> value_t { return materialize<expr.value_>(); };
+        return [](program_state auto&) static -> value_t { return materialize<expr.value_>(); };
     }
 
     template <const flat_logical_expr& expr>
     static constexpr auto generate_expr() {
-        auto left = visit<expr.left_>();
-        auto right = visit<expr.right_>();
+        using left = visit_t<expr.left_>;
+        using right = visit_t<expr.right_>;
 
-        constexpr auto short_cirtuit_op = short_circuit_op_for<expr.operator_.type_>();
-        static_assert(short_cirtuit_op != none, "Unexpected logical operator.");
+        using short_cirtuit_op = decltype(short_circuit_op_for<expr.operator_.type_>());
+        static_assert(short_cirtuit_op {} != none, "Unexpected logical operator.");
 
-        return [=](program_state auto& state) -> value_t {
-            value_t lhs = left(state);
+        return [](program_state auto& state) static -> value_t {
+            value_t lhs = left {}(state);
 
-            if (short_cirtuit_op(lhs))
+            if (short_cirtuit_op {}(lhs))
                 return lhs;
 
-            return right(state);
+            return right {}(state);
         };
     }
 
     template <const flat_unary_expr& expr>
     static constexpr auto generate_expr() {
-        auto right = visit<expr.right_>();
+        using right = visit_t<expr.right_>;
 
         if constexpr (expr.operator_.type_ == token_type::bang) {
-            return [=](program_state auto& state) -> value_t {
-                value_t value = right(state);
+            return [](program_state auto& state) static -> value_t {
+                value_t value = right {}(state);
                 value = !is_truthy(value);
                 return value;
             };
         }
 
         else if constexpr (expr.operator_.type_ == token_type::minus) {
-            return [=](program_state auto& state) -> value_t {
-                value_t value = right(state);
+            return [](program_state auto& state) static -> value_t {
+                value_t value = right {}(state);
                 double& number = check_number_operand<expr.operator_>(value);
                 number = -number;
                 return value;
@@ -352,7 +357,7 @@ private:
 
     template <const flat_variable_expr& expr>
     static constexpr auto generate_expr() {
-        return [](program_state auto& state) -> value_t { return state.get_var(expr.name_); };
+        return [](program_state auto& state) static -> value_t { return state.get_var(expr.name_); };
     }
 };
 

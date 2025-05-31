@@ -26,14 +26,18 @@ print nil or "zim" or false;
 // print 1 > false;  // throws a ctlox::runtime_error
 )"_lox;
 
+static_assert(sizeof(program) == 1);
+
 constexpr int count_prints() {
     int i = 0;
     program([&i](const ctlox::v2::value_t&) { ++i; });
     return i;
 }
-// static_assert(count_prints() == 6);
 
 int main() try {
+    constexpr int prints = count_prints();
+    std::print("program prints {} times.\n\n", prints);
+
     program();
 
     return 0;
