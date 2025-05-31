@@ -70,4 +70,13 @@ print nil;
     ctlox::v2::nil,
 }));
 
+static_assert(test_program<R"(
+var foo = 0;
+var bar = 1;
+if (foo > bar) print foo; else print bar;
+foo = 10;
+if (foo > bar) print foo; else print bar;
+if (foo and bar and false) print "foo";
+)">({ 1.0, 10.0 }));
+
 }  // namespace test_v2::test_code_generator

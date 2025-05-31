@@ -130,6 +130,16 @@ struct _code_generator_base {
             return none;
     }
 
+    template <token_type type>
+    static constexpr auto short_circuit_op_for() {
+        if constexpr (type == token_type::_or)
+            return [](const value_t& value) { return is_truthy(value); };
+        else if constexpr (type == token_type::_and)
+            return [](const value_t& value) { return !is_truthy(value); };
+        else
+            return none;
+    }
+
     template <const literal_t& literal>
     static constexpr value_t materialize() {
         return value_t(std::in_place_index<literal.index() - 1>, static_visit_v<literal>);
@@ -181,6 +191,32 @@ private:
     static constexpr auto generate_stmt() {
         auto expr = visit<stmt.expression_>();
         return [=](program_state auto& state) -> void { expr(state); };
+    }
+
+    template <const flat_if_stmt& stmt>
+    static constexpr auto generate_stmt() {
+        auto condition = visit<stmt.condition_>();
+        auto then_branch = visit<stmt.then_branch_>();
+
+        if constexpr (stmt.else_branch_ != flat_nullptr) {
+            auto else_branch = visit<stmt.else_branch_>();
+
+            return [=](program_state auto& state) -> void {
+                if (is_truthy(condition(state))) {
+                    then_branch(state);
+                } else {
+                    else_branch(state);
+                }
+            };
+        }
+
+        else {
+            return [=](program_state auto& state) -> void {
+                if (is_truthy(condition(state))) {
+                    then_branch(state);
+                }
+            };
+        }
     }
 
     template <const flat_print_stmt& stmt>
@@ -267,8 +303,24 @@ private:
     static constexpr auto generate_expr() {
         static_assert(!std::holds_alternative<none_t>(expr.value_));
 
-        return [=](program_state auto&) -> value_t {
-            return materialize<expr.value_>();
+        return [=](program_state auto&) -> value_t { return materialize<expr.value_>(); };
+    }
+
+    template <const flat_logical_expr& expr>
+    static constexpr auto generate_expr() {
+        auto left = visit<expr.left_>();
+        auto right = visit<expr.right_>();
+
+        constexpr auto short_cirtuit_op = short_circuit_op_for<expr.operator_.type_>();
+        static_assert(short_cirtuit_op != none, "Unexpected logical operator.");
+
+        return [=](program_state auto& state) -> value_t {
+            value_t lhs = left(state);
+
+            if (short_cirtuit_op(lhs))
+                return lhs;
+
+            return right(state);
         };
     }
 

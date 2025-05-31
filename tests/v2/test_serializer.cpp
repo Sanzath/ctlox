@@ -27,6 +27,10 @@ constexpr auto null_expr() {
     return [](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
 }
 
+constexpr auto null_stmt() {
+    return [](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
+}
+
 constexpr auto assign_expr(std::string_view name, auto check_value) {
     return [=](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& assign_expr = expect_holds<ctlox::v2::flat_assign_expr>(ast, node_ptr);
@@ -55,6 +59,15 @@ constexpr auto literal_expr(const ctlox::v2::literal_t& literal) {
     return [=](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& literal_expr = expect_holds<ctlox::v2::flat_literal_expr>(ast, node_ptr);
         expect(literal_expr.value_ == literal);
+    };
+}
+
+constexpr auto logical_expr(ctlox::token_type oper, auto check_left, auto check_right) {
+    return [=](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) {
+        const auto& logical_expr = expect_holds<ctlox::v2::flat_logical_expr>(ast, node_ptr);
+        expect(logical_expr.operator_.type_ == oper);
+        check_left(ast, logical_expr.left_);
+        check_right(ast, logical_expr.right_);
     };
 }
 
@@ -91,6 +104,15 @@ constexpr auto expression_stmt(auto check_expression) {
     return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& expression_stmt = expect_holds<ctlox::v2::flat_expression_stmt>(ast, node_ptr);
         check_expression(ast, expression_stmt.expression_);
+    };
+}
+
+constexpr auto if_stmt(auto check_condition, auto check_then_branch, auto check_else_branch) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& if_stmt = expect_holds<ctlox::v2::flat_if_stmt>(ast, node_ptr);
+        check_condition(ast, if_stmt.condition_);
+        check_then_branch(ast, if_stmt.then_branch_);
+        check_else_branch(ast, if_stmt.else_branch_);
     };
 }
 
@@ -195,16 +217,21 @@ var foo = (12 + 13) / 2;
     foo = "Hello," + space + "world!";
 }
 print !foo;
+
+if (nil or foo) {
+    if (!foo)
+        print "impossible!";
+    else
+        print "all is well";
+    print "fooful";
+}
 )";
 
     constexpr ctlox::v2::ast_generator auto gen = [] { return ctlox::v2::parse(ctlox::v2::scan(source)); };
     constexpr auto ast = ctlox::v2::static_serialize<gen>();
 
     static_assert(ast.root_block_.first_.i == 0);
-    static_assert(ast.root_block_.last_.i == 3);
-
-    static_assert(ast.statements_.size() == 6);
-    static_assert(ast.expressions_.size() == 16);
+    static_assert(ast.root_block_.last_.i == 4);
 
     // clang-format off
     constexpr auto check_0 =
@@ -233,11 +260,26 @@ print !foo;
         print_stmt(
             unary_expr(ctlox::token_type::bang,
                 variable_expr("foo")));
+    constexpr auto check_3 =
+        if_stmt(
+            logical_expr(ctlox::token_type::_or,
+                literal_expr(ctlox::v2::nil),
+                variable_expr("foo")),
+            block_stmt(
+                if_stmt(
+                    unary_expr(ctlox::token_type::bang,
+                        variable_expr("foo")),
+                    print_stmt(literal_expr("impossible!")),
+                    print_stmt(literal_expr("all is well"))),
+                print_stmt(literal_expr("fooful"))
+            ),
+            null_stmt());
     // clang-format on
 
     static_assert((check_0(ast, ctlox::v2::flat_stmt_ptr { 0 }), true));
     static_assert((check_1(ast, ctlox::v2::flat_stmt_ptr { 1 }), true));
     static_assert((check_2(ast, ctlox::v2::flat_stmt_ptr { 2 }), true));
+    static_assert((check_3(ast, ctlox::v2::flat_stmt_ptr { 3 }), true));
 }  // namespace test_static_serialize
 
 }  // namespace test_v2::test_serializer

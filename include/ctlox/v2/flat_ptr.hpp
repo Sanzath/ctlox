@@ -27,6 +27,8 @@ struct flat_list final {
     flat_ptr<T> first_;
     flat_ptr<T> last_;
 
+    using value_type = flat_ptr<T>;
+
     struct const_iterator final {
         using difference_type = std::ptrdiff_t;
         using value_type = const flat_ptr<T>;

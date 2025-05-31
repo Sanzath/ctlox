@@ -48,6 +48,27 @@ public:
         return flat_expression_stmt { .expression_ = ptr };
     }
 
+    constexpr flat_stmt_t operator()(const if_stmt& statement) {
+        flat_expr_ptr condition = reserve_expr();
+        flat_stmt_ptr then_branch = reserve_stmt();
+        flat_stmt_ptr else_branch;
+        if (statement.else_branch_) {
+            else_branch = reserve_stmt();
+        }
+
+        put_expr(condition, statement.condition_->visit(*this));
+        put_stmt(then_branch, statement.then_branch_->visit(*this));
+        if (statement.else_branch_) {
+            put_stmt(else_branch, statement.else_branch_->visit(*this));
+        }
+
+        return flat_if_stmt {
+            .condition_ = condition,
+            .then_branch_ = then_branch,
+            .else_branch_ = else_branch,
+        };
+    }
+
     constexpr flat_stmt_t operator()(const print_stmt& statement) {
         flat_expr_ptr ptr = reserve_expr();
         put_expr(ptr, statement.expression_->visit(*this));
@@ -102,6 +123,20 @@ public:
         return expression;
     }
 
+    constexpr flat_expr_t operator()(const logical_expr& expression) {
+        flat_expr_ptr left = reserve_expr();
+        flat_expr_ptr right = reserve_expr();
+
+        put_expr(left, expression.left_->visit(*this));
+        put_expr(right, expression.right_->visit(*this));
+
+        return flat_logical_expr {
+            .operator_ = expression.operator_,
+            .left_ = left,
+            .right_ = right,
+        };
+    }
+
     constexpr flat_expr_t operator()(const unary_expr& expression) {
         flat_expr_ptr ptr = reserve_expr();
         put_expr(ptr, expression.right_->visit(*this));
@@ -124,6 +159,14 @@ private:
         statements_.resize(statements_.size() + count);
 
         return block;
+    }
+
+    constexpr flat_stmt_ptr reserve_stmt() {
+        flat_stmt_ptr ptr(statements_.size());
+
+        statements_.emplace_back();
+
+        return ptr;
     }
 
     constexpr void put_stmt(flat_stmt_ptr ptr, flat_stmt_t&& stmt) { statements_[ptr.i] = std::move(stmt); }

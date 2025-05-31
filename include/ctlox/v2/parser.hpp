@@ -44,12 +44,33 @@ private:
     }
 
     constexpr stmt_ptr statement() {
+        if (match(token_type::_if))
+            return if_statement();
         if (match(token_type::_print))
             return print_statement();
         if (match(token_type::left_brace))
             return make_stmt(block_stmt { .statements_ = block() });
 
         return expression_statement();
+    }
+
+    constexpr stmt_ptr if_statement() {
+        consume(token_type::left_paren, "Expect '(' after 'if'.");
+        expr_ptr condition = expression();
+        consume(token_type::right_paren, "Expect ')' after condition.");
+
+        stmt_ptr then_branch = statement();
+        stmt_ptr else_branch;
+        if (match(token_type::_else)) {
+            else_branch = statement();
+        }
+
+        return make_stmt(
+            if_stmt {
+                .condition_ = std::move(condition),
+                .then_branch_ = std::move(then_branch),
+                .else_branch_ = std::move(else_branch),
+            });
     }
 
     constexpr stmt_ptr print_statement() {
@@ -88,7 +109,7 @@ private:
     }
 
     constexpr expr_ptr assignment() {
-        expr_ptr expr = equality();
+        expr_ptr expr = _or();
 
         if (match(token_type::equal)) {
             token_t equals = previous();
@@ -100,6 +121,42 @@ private:
             } else {
                 throw parse_error(equals, "Invalid assignment target.");
             }
+        }
+
+        return expr;
+    }
+
+    constexpr expr_ptr _or() {
+        expr_ptr expr = _and();
+
+        while (match(token_type::_or)) {
+            token_t oper = previous();
+            expr_ptr right = _and();
+
+            expr = make_expr(
+                logical_expr {
+                    .operator_ = oper,
+                    .left_ = std::move(expr),
+                    .right_ = std::move(right),
+                });
+        }
+
+        return expr;
+    }
+
+    constexpr expr_ptr _and() {
+        expr_ptr expr = equality();
+
+        while (match(token_type::_and)) {
+            token_t oper = previous();
+            expr_ptr right = equality();
+
+            expr = make_expr(
+                logical_expr {
+                    .operator_ = oper,
+                    .left_ = std::move(expr),
+                    .right_ = std::move(right),
+                });
         }
 
         return expr;

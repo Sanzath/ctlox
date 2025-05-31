@@ -83,6 +83,59 @@ namespace test_statements {
             expect(expression.value_ == ctlox::v2::literal_t(false));
         }
     }));
+
+    static_assert(test_statement(R"(if (true) 1;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
+
+        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
+        expect(condition.value_ == ctlox::v2::literal_t(true));
+
+        const auto& then_branch = expect_holds<ctlox::v2::expression_stmt>(statement.then_branch_);
+        const auto& then_expr = expect_holds<ctlox::v2::literal_expr>(then_branch.expression_);
+        expect(then_expr.value_ == ctlox::v2::literal_t(1.0));
+
+        expect(statement.else_branch_ == nullptr);
+    }));
+
+    static_assert(test_statement(R"(if (true) 1; else 0;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
+
+        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
+        expect(condition.value_ == ctlox::v2::literal_t(true));
+
+        const auto& then_branch = expect_holds<ctlox::v2::expression_stmt>(statement.then_branch_);
+        const auto& then_expr = expect_holds<ctlox::v2::literal_expr>(then_branch.expression_);
+        expect(then_expr.value_ == ctlox::v2::literal_t(1.0));
+
+        const auto& else_branch = expect_holds<ctlox::v2::expression_stmt>(statement.else_branch_);
+        const auto& else_expr = expect_holds<ctlox::v2::literal_expr>(else_branch.expression_);
+        expect(else_expr.value_ == ctlox::v2::literal_t(0.0));
+    }));
+
+    // else binds to nearest if
+    static_assert(test_statement(R"(if (true) if (false) 1; else 0;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
+
+        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
+        expect(condition.value_ == ctlox::v2::literal_t(true));
+
+        {
+            const auto& then_branch = expect_holds<ctlox::v2::if_stmt>(statement.then_branch_);
+
+            const auto& then_condition = expect_holds<ctlox::v2::literal_expr>(then_branch.condition_);
+            expect(then_condition.value_ == ctlox::v2::literal_t(false));
+
+            const auto& then_then_branch = expect_holds<ctlox::v2::expression_stmt>(then_branch.then_branch_);
+            const auto& then_then_expr = expect_holds<ctlox::v2::literal_expr>(then_then_branch.expression_);
+            expect(then_then_expr.value_ == ctlox::v2::literal_t(1.0));
+
+            const auto& then_else_branch = expect_holds<ctlox::v2::expression_stmt>(then_branch.else_branch_);
+            const auto& then_else_expr = expect_holds<ctlox::v2::literal_expr>(then_else_branch.expression_);
+            expect(then_else_expr.value_ == ctlox::v2::literal_t(0.0));
+        }
+
+        expect(statement.else_branch_ == nullptr);
+    }));
 }  // namespace test_statements
 
 namespace test_simple_expressions {
@@ -208,6 +261,15 @@ namespace test_complex_expressions {
         };
     }
 
+    constexpr auto logical_expr(ctlox::token_type oper, auto check_left, auto check_right) {
+        return [=](const ctlox::v2::expr_ptr& node_ptr) {
+            const auto& logical_expr = expect_holds<ctlox::v2::logical_expr>(node_ptr);
+            expect(logical_expr.operator_.type_ == oper);
+            check_left(logical_expr.left_);
+            check_right(logical_expr.right_);
+        };
+    }
+
     constexpr auto unary_expr(ctlox::token_type oper, auto check_right) {
         return [=](const ctlox::v2::expr_ptr& node_ptr) {
             const auto& unary_expr = expect_holds<ctlox::v2::unary_expr>(node_ptr);
@@ -224,19 +286,57 @@ namespace test_complex_expressions {
     }
 
     // clang-format off: manually control how these tree formats are formatted
+
     // assignment binding order
     static_assert(test_expression("foo = bar = nil;",
         assign_expr("foo"sv,
             assign_expr("bar"sv,
                 literal_expr(ctlox::v2::nil)))));
 
-    // assignment/equality precedence
-    static_assert(test_expression("foo = bar == zim;",
+    // assignment/or precedence
+    static_assert(test_expression("foo = bar or zim;",
         assign_expr("foo"sv,
-            binary_expr(
-                ctlox::token_type::equal_equal,
+            logical_expr(ctlox::token_type::_or,
                 variable_expr("bar"sv),
                 variable_expr("zim"sv)))));
+
+    // or binding order
+    static_assert(test_expression("foo or bar or zim;",
+        logical_expr(ctlox::token_type::_or,
+            logical_expr(ctlox::token_type::_or,
+                variable_expr("foo"sv),
+                variable_expr("bar"sv)),
+            variable_expr("zim"sv))));
+
+    // or/and precedence
+    static_assert(test_expression("foo or bar and zim or baz and tok;",
+        logical_expr(ctlox::token_type::_or,
+            logical_expr(ctlox::token_type::_or,
+                variable_expr("foo"sv),
+                logical_expr(ctlox::token_type::_and,
+                    variable_expr("bar"sv),
+                    variable_expr("zim"sv))),
+            logical_expr(ctlox::token_type::_and,
+                variable_expr("baz"sv),
+                variable_expr("tok"sv)))));
+
+    // and binding order
+    static_assert(test_expression("foo and bar and zim;",
+        logical_expr(ctlox::token_type::_and,
+            logical_expr(ctlox::token_type::_and,
+                variable_expr("foo"sv),
+                variable_expr("bar"sv)),
+            variable_expr("zim"sv))));
+
+    // and/equality precedence
+    static_assert(test_expression("foo and bar == zim and baz;",
+        logical_expr(ctlox::token_type::_and,
+            logical_expr(ctlox::token_type::_and,
+                variable_expr("foo"sv),
+                binary_expr(ctlox::token_type::equal_equal,
+                    variable_expr("bar"sv),
+                    variable_expr("zim"sv))),
+            variable_expr("baz"sv))));
 
     // equality binding order
     static_assert(test_expression("1 == 2 != 3 == 4;",

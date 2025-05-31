@@ -35,6 +35,16 @@ struct basic_expression_stmt {
 using expression_stmt = basic_expression_stmt<expr_ptr>;
 using flat_expression_stmt = basic_expression_stmt<flat_expr_ptr>;
 
+template <typename StmtPtr, typename ExprPtr>
+struct basic_if_stmt {
+    ExprPtr condition_;
+    StmtPtr then_branch_;
+    StmtPtr else_branch_;
+};
+
+using if_stmt = basic_if_stmt<stmt_ptr, expr_ptr>;
+using flat_if_stmt = basic_if_stmt<flat_stmt_ptr, flat_expr_ptr>;
+
 template <typename ExprPtr>
 struct basic_print_stmt {
     ExprPtr expression_;
@@ -54,9 +64,12 @@ using flat_var_stmt = basic_var_stmt<flat_expr_ptr>;
 
 template <typename StmtList, typename ExprPtr>
 class basic_stmt_t {
+    using StmtPtr = typename StmtList::value_type;
+
     using variant_t = std::variant<
         basic_block_stmt<StmtList>,
         basic_expression_stmt<ExprPtr>,
+        basic_if_stmt<StmtPtr, ExprPtr>,
         basic_print_stmt<ExprPtr>,
         basic_var_stmt<ExprPtr>>;
 

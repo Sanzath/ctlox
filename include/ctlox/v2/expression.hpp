@@ -50,6 +50,16 @@ using literal_expr = basic_literal_expr;
 using flat_literal_expr = basic_literal_expr;
 
 template <typename ExprPtr>
+struct basic_logical_expr {
+    token_t operator_;
+    ExprPtr left_;
+    ExprPtr right_;
+};
+
+using logical_expr = basic_logical_expr<expr_ptr>;
+using flat_logical_expr = basic_logical_expr<flat_expr_ptr>;
+
+template <typename ExprPtr>
 struct basic_unary_expr {
     token_t operator_;
     ExprPtr right_;
@@ -72,6 +82,7 @@ class basic_expr_t {
         basic_binary_expr<ExprPtr>,
         basic_grouping_expr<ExprPtr>,
         basic_literal_expr,
+        basic_logical_expr<ExprPtr>,
         basic_unary_expr<ExprPtr>,
         basic_variable_expr>;
 
@@ -116,6 +127,7 @@ public:
     using basic_expr_t::basic_expr_t;
     constexpr ~expr_t() noexcept = default;
 };
+
 class flat_expr_t : public basic_expr_t<flat_expr_ptr> {
 public:
     using basic_expr_t::basic_expr_t;
