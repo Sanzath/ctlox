@@ -86,6 +86,16 @@ public:
         return flat_var_stmt { .name_ = statement.name_, .initializer_ = ptr };
     }
 
+    constexpr flat_stmt_t operator()(const while_stmt& statement) {
+        flat_expr_ptr condition = reserve_expr();
+        flat_stmt_ptr body = reserve_stmt();
+
+        put_expr(condition, statement.condition_->visit(*this));
+        put_stmt(body, statement.body_->visit(*this));
+
+        return flat_while_stmt { .condition_ = condition, .body_ = body };
+    }
+
     constexpr flat_expr_t operator()(const assign_expr& expression) {
         flat_expr_ptr ptr = reserve_expr();
         put_expr(ptr, expression.value_->visit(*this));

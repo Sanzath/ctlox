@@ -92,4 +92,27 @@ static_assert(test_program<R"(
 0;                                                                                               // 257
 )">({}));
 
+static_assert(test_program<R"(
+var b = 0;
+while (b < 4) {
+    print b;
+    b = b + 1;
+}
+)">({ 0.0, 1.0, 2.0, 3.0 }));
+
+static_assert(test_program<R"(
+for (var b = 0; b < 4; b = b + 1) print b;
+)">({ 0.0, 1.0, 2.0, 3.0 }));
+
+static_assert(test_program<R"(
+var a = 0;
+var temp;
+
+for (var b = 1; a < 5000; b = temp + b) {
+  print a;
+  temp = a;
+  a = b;
+}
+)">({ 0., 1., 1., 2., 3., 5., 8., 13., 21., 34., 55., 89., 144., 233., 377., 610., 987., 1597., 2584., 4181. }));
+
 }  // namespace test_v2::test_code_generator

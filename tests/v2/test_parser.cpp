@@ -20,6 +20,122 @@ constexpr const T& expect_holds(const auto& node_ptr) {
     throw std::logic_error("Node holds incorrect type");
 }
 
+constexpr auto null_stmt() {
+    return [](const ctlox::v2::stmt_ptr& node_ptr) { expect(node_ptr == nullptr); };
+}
+
+constexpr auto block_stmt(auto... check_statements) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& block_stmt = expect_holds<ctlox::v2::block_stmt>(node_ptr);
+        const auto& statements = block_stmt.statements_;
+
+        expect(statements.size() == sizeof...(check_statements));
+
+        auto it = statements.begin();
+        (check_statements(*it++), ...);
+
+        expect(it == statements.end());
+    };
+}
+
+constexpr auto expression_stmt(auto check_expression) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& expression_stmt = expect_holds<ctlox::v2::expression_stmt>(node_ptr);
+        check_expression(expression_stmt.expression_);
+    };
+}
+
+constexpr auto if_stmt(auto check_condition, auto check_then_branch, auto check_else_branch) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& if_stmt = expect_holds<ctlox::v2::if_stmt>(node_ptr);
+        check_condition(if_stmt.condition_);
+        check_then_branch(if_stmt.then_branch_);
+        check_else_branch(if_stmt.else_branch_);
+    };
+}
+
+constexpr auto print_stmt(auto check_expression) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& print_stmt = expect_holds<ctlox::v2::print_stmt>(node_ptr);
+        check_expression(print_stmt.expression_);
+    };
+}
+
+constexpr auto var_stmt(std::string_view name, auto check_initializer) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& var_stmt = expect_holds<ctlox::v2::var_stmt>(node_ptr);
+        expect(var_stmt.name_.lexeme_ == name);
+        check_initializer(var_stmt.initializer_);
+    };
+}
+
+constexpr auto while_stmt(auto check_condition, auto check_body) {
+    return [=](const ctlox::v2::stmt_ptr& node_ptr) {
+        const auto& while_stmt = expect_holds<ctlox::v2::while_stmt>(node_ptr);
+        check_condition(while_stmt.condition_);
+        check_body(while_stmt.body_);
+    };
+}
+
+constexpr auto null_expr() {
+    return [](const ctlox::v2::expr_ptr& node_ptr) { expect(node_ptr == nullptr); };
+}
+
+constexpr auto assign_expr(std::string_view name, auto check_value) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& assign_expr = expect_holds<ctlox::v2::assign_expr>(node_ptr);
+        expect(assign_expr.name_.lexeme_ == name);
+        check_value(assign_expr.value_);
+    };
+}
+
+constexpr auto binary_expr(ctlox::token_type oper, auto check_left, auto check_right) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& binary_expr = expect_holds<ctlox::v2::binary_expr>(node_ptr);
+        expect(binary_expr.operator_.type_ == oper);
+        check_left(binary_expr.left_);
+        check_right(binary_expr.right_);
+    };
+}
+
+constexpr auto grouping_expr(auto check_expr) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& grouping_expr = expect_holds<ctlox::v2::grouping_expr>(node_ptr);
+        check_expr(grouping_expr.expr_);
+    };
+}
+
+constexpr auto literal_expr(const ctlox::v2::literal_t& literal) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& literal_expr = expect_holds<ctlox::v2::literal_expr>(node_ptr);
+        expect(literal_expr.value_ == literal);
+    };
+}
+
+constexpr auto logical_expr(ctlox::token_type oper, auto check_left, auto check_right) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& logical_expr = expect_holds<ctlox::v2::logical_expr>(node_ptr);
+        expect(logical_expr.operator_.type_ == oper);
+        check_left(logical_expr.left_);
+        check_right(logical_expr.right_);
+    };
+}
+
+constexpr auto unary_expr(ctlox::token_type oper, auto check_right) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& unary_expr = expect_holds<ctlox::v2::unary_expr>(node_ptr);
+        expect(unary_expr.operator_.type_ == oper);
+        check_right(unary_expr.right_);
+    };
+}
+
+constexpr auto variable_expr(std::string_view name) {
+    return [=](const ctlox::v2::expr_ptr& node_ptr) {
+        const auto& variable_expr = expect_holds<ctlox::v2::variable_expr>(node_ptr);
+        expect(variable_expr.name_.lexeme_ == name);
+    };
+}
+
 constexpr bool test_statement(std::string_view source, auto check) {
     const auto statements = ctlox::v2::parse(ctlox::v2::scan(source));
 
@@ -38,253 +154,160 @@ constexpr bool test_expression(std::string_view source, auto check) {
 }
 
 namespace test_statements {
-    static_assert(test_statement("123.52;", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::expression_stmt>(node_ptr);
+    // clang-format off
+    static_assert(test_statement("123.52;",
+        expression_stmt(
+            literal_expr(123.52))));
 
-        const auto& expression = expect_holds<ctlox::v2::literal_expr>(statement.expression_);
-        expect(expression.value_ == ctlox::v2::literal_t(123.52));
-    }));
+    static_assert(test_statement("print nil;",
+        print_stmt(
+            literal_expr(ctlox::v2::nil))));
 
-    static_assert(test_statement("print nil;", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::print_stmt>(node_ptr);
+    static_assert(test_statement("var foo;",
+        var_stmt("foo", null_expr())));
 
-        const auto& expression = expect_holds<ctlox::v2::literal_expr>(statement.expression_);
-        expect(expression.value_ == ctlox::v2::literal_t(ctlox::v2::nil));
-    }));
+    static_assert(test_statement("var bar = true;",
+        var_stmt("bar",
+            literal_expr(true))));
 
-    static_assert(test_statement("var foo;", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::var_stmt>(node_ptr);
-        expect(statement.name_.lexeme_ == "foo"sv);
-        expect(statement.initializer_ == nullptr);
-    }));
+    static_assert(test_statement(R"({ "zim"; false; })",
+        block_stmt(
+            expression_stmt(
+                literal_expr("zim")),
+            expression_stmt(
+                literal_expr(false))
+            )));
 
-    static_assert(test_statement("var bar = true;", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::var_stmt>(node_ptr);
-        expect(statement.name_.lexeme_ == "bar"sv);
+    static_assert(test_statement(R"(if (true) 1;)",
+        if_stmt(
+            literal_expr(true),
+            expression_stmt(
+                literal_expr(1.0)),
+            null_stmt())));
 
-        const auto& initializer = expect_holds<ctlox::v2::literal_expr>(statement.initializer_);
-        expect(initializer.value_ == ctlox::v2::literal_t(true));
-    }));
-
-    static_assert(test_statement(R"({ "zim"; false; })", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::block_stmt>(node_ptr);
-
-        {
-            const auto& sub_statement = expect_holds<ctlox::v2::expression_stmt>(statement.statements_[0]);
-
-            const auto& expression = expect_holds<ctlox::v2::literal_expr>(sub_statement.expression_);
-            expect(expression.value_ == ctlox::v2::literal_t("zim"));
-        }
-
-        {
-            const auto& sub_statement = expect_holds<ctlox::v2::expression_stmt>(statement.statements_[1]);
-
-            const auto& expression = expect_holds<ctlox::v2::literal_expr>(sub_statement.expression_);
-            expect(expression.value_ == ctlox::v2::literal_t(false));
-        }
-    }));
-
-    static_assert(test_statement(R"(if (true) 1;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
-
-        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
-        expect(condition.value_ == ctlox::v2::literal_t(true));
-
-        const auto& then_branch = expect_holds<ctlox::v2::expression_stmt>(statement.then_branch_);
-        const auto& then_expr = expect_holds<ctlox::v2::literal_expr>(then_branch.expression_);
-        expect(then_expr.value_ == ctlox::v2::literal_t(1.0));
-
-        expect(statement.else_branch_ == nullptr);
-    }));
-
-    static_assert(test_statement(R"(if (true) 1; else 0;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
-
-        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
-        expect(condition.value_ == ctlox::v2::literal_t(true));
-
-        const auto& then_branch = expect_holds<ctlox::v2::expression_stmt>(statement.then_branch_);
-        const auto& then_expr = expect_holds<ctlox::v2::literal_expr>(then_branch.expression_);
-        expect(then_expr.value_ == ctlox::v2::literal_t(1.0));
-
-        const auto& else_branch = expect_holds<ctlox::v2::expression_stmt>(statement.else_branch_);
-        const auto& else_expr = expect_holds<ctlox::v2::literal_expr>(else_branch.expression_);
-        expect(else_expr.value_ == ctlox::v2::literal_t(0.0));
-    }));
+    static_assert(test_statement(R"(if (true) 1; else 0;)",
+        if_stmt(
+            literal_expr(true),
+            expression_stmt(
+                literal_expr(1.0)),
+            expression_stmt(
+                literal_expr(0.0)))));
 
     // else binds to nearest if
-    static_assert(test_statement(R"(if (true) if (false) 1; else 0;)", [](const ctlox::v2::stmt_ptr& node_ptr) {
-        const auto& statement = expect_holds<ctlox::v2::if_stmt>(node_ptr);
+    static_assert(test_statement(R"(if (true) if (false) 1; else 0;)",
+        if_stmt(
+            literal_expr(true),
+            if_stmt(
+                literal_expr(false),
+                expression_stmt(literal_expr(1.0)),
+                expression_stmt(literal_expr(0.0))),
+            null_stmt())));
 
-        const auto& condition = expect_holds<ctlox::v2::literal_expr>(statement.condition_);
-        expect(condition.value_ == ctlox::v2::literal_t(true));
+    static_assert(test_statement(R"(while (true) print "foo";)",
+        while_stmt(
+            literal_expr(true),
+            print_stmt(literal_expr("foo")))));
 
-        {
-            const auto& then_branch = expect_holds<ctlox::v2::if_stmt>(statement.then_branch_);
+    static_assert(test_statement(R"(for (;;) print "foo";)",
+        while_stmt(
+            literal_expr(true),
+            print_stmt(literal_expr("foo")))));
 
-            const auto& then_condition = expect_holds<ctlox::v2::literal_expr>(then_branch.condition_);
-            expect(then_condition.value_ == ctlox::v2::literal_t(false));
+    static_assert(test_statement(R"(for (; a < b;) print "foo";)",
+        while_stmt(
+            binary_expr(ctlox::token_type::less,
+                variable_expr("a"),
+                variable_expr("b")),
+            print_stmt(literal_expr("foo")))));
 
-            const auto& then_then_branch = expect_holds<ctlox::v2::expression_stmt>(then_branch.then_branch_);
-            const auto& then_then_expr = expect_holds<ctlox::v2::literal_expr>(then_then_branch.expression_);
-            expect(then_then_expr.value_ == ctlox::v2::literal_t(1.0));
+    static_assert(test_statement(R"(for (; a < b; a = a + 1) print "foo";)",
+        while_stmt(
+            binary_expr(ctlox::token_type::less,
+                variable_expr("a"),
+                variable_expr("b")),
+            block_stmt(
+                print_stmt(
+                    literal_expr("foo")),
+                expression_stmt(
+                    assign_expr("a",
+                        binary_expr(ctlox::token_type::plus,
+                            variable_expr("a"),
+                            literal_expr(1.0))))
+            ))));
 
-            const auto& then_else_branch = expect_holds<ctlox::v2::expression_stmt>(then_branch.else_branch_);
-            const auto& then_else_expr = expect_holds<ctlox::v2::literal_expr>(then_else_branch.expression_);
-            expect(then_else_expr.value_ == ctlox::v2::literal_t(0.0));
-        }
+    static_assert(test_statement(R"(for (a = 10;;) print "foo";)",
+        block_stmt(
+            expression_stmt(
+                assign_expr("a",
+                    literal_expr(10.0))),
+            while_stmt(
+                literal_expr(true),
+                print_stmt(
+                    literal_expr("foo")))
+        )));
 
-        expect(statement.else_branch_ == nullptr);
-    }));
+    static_assert(test_statement(R"(for (var a = 10;;) print "foo";)",
+        block_stmt(
+            var_stmt("a",
+                literal_expr(10.0)),
+            while_stmt(
+                literal_expr(true),
+                print_stmt(
+                    literal_expr("foo")))
+        )));
+    // clang-format on
 }  // namespace test_statements
 
 namespace test_simple_expressions {
-    static_assert(test_expression("foo = 7;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::assign_expr>(node_ptr);
-        expect(expression.name_.lexeme_ == "foo"sv);
+    // clang-format off
+    static_assert(test_expression("foo = 7;",
+        assign_expr("foo", literal_expr(7.0))));
 
-        const auto& value = expect_holds<ctlox::v2::literal_expr>(expression.value_);
-        expect(value.value_ == ctlox::v2::literal_t(7.0));
-    }));
+    static_assert(test_expression("2 * 3;",
+        binary_expr(ctlox::token_type::star, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 * 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::star);
+    static_assert(test_expression("2 / 3;",
+        binary_expr(ctlox::token_type::slash, literal_expr(2.0), literal_expr(3.0))));
 
-        const auto& left = expect_holds<ctlox::v2::literal_expr>(expression.left_);
-        expect(left.value_ == ctlox::v2::literal_t(2.0));
+    static_assert(test_expression("2 + 3;",
+        binary_expr(ctlox::token_type::plus, literal_expr(2.0), literal_expr(3.0))));
 
-        const auto& right = expect_holds<ctlox::v2::literal_expr>(expression.right_);
-        expect(right.value_ == ctlox::v2::literal_t(3.0));
-    }));
+    static_assert(test_expression("2 - 3;",
+        binary_expr(ctlox::token_type::minus, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 / 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::slash);
-    }));
+    static_assert(test_expression("2 > 3;",
+        binary_expr(ctlox::token_type::greater, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 + 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::plus);
-    }));
+    static_assert(test_expression("2 >= 3;",
+        binary_expr(ctlox::token_type::greater_equal, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 - 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::minus);
-    }));
+    static_assert(test_expression("2 < 3;",
+        binary_expr(ctlox::token_type::less, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 > 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::greater);
-    }));
+    static_assert(test_expression("2 <= 3;",
+        binary_expr(ctlox::token_type::less_equal, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 >= 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::greater_equal);
-    }));
+    static_assert(test_expression("2 == 3;",
+        binary_expr(ctlox::token_type::equal_equal, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 < 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::less);
-    }));
+    static_assert(test_expression("2 != 3;",
+        binary_expr(ctlox::token_type::bang_equal, literal_expr(2.0), literal_expr(3.0))));
 
-    static_assert(test_expression("2 <= 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::less_equal);
-    }));
+    static_assert(test_expression("(nil);",
+        grouping_expr(literal_expr(ctlox::v2::nil))));
 
-    static_assert(test_expression("2 == 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::equal_equal);
-    }));
+    static_assert(test_expression("!true;",
+        unary_expr(ctlox::token_type::bang, literal_expr(true))));
 
-    static_assert(test_expression("2 != 3;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::bang_equal);
-    }));
+    static_assert(test_expression("-2;",
+        unary_expr(ctlox::token_type::minus, literal_expr(2.0))));
 
-    static_assert(test_expression("(nil);", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::grouping_expr>(node_ptr);
-
-        const auto& sub_expression = expect_holds<ctlox::v2::literal_expr>(expression.expr_);
-        expect(sub_expression.value_ == ctlox::v2::literal_t(ctlox::v2::nil));
-    }));
-
-    static_assert(test_expression("!true;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::unary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::bang);
-
-        const auto& right = expect_holds<ctlox::v2::literal_expr>(expression.right_);
-        expect(right.value_ == ctlox::v2::literal_t(true));
-    }));
-
-    static_assert(test_expression("-2;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::unary_expr>(node_ptr);
-        expect(expression.operator_.type_ == ctlox::token_type::minus);
-    }));
-
-    static_assert(test_expression("baz;", [](const ctlox::v2::expr_ptr& node_ptr) {
-        const auto& expression = expect_holds<ctlox::v2::variable_expr>(node_ptr);
-        expect(expression.name_.lexeme_ == "baz"sv);
-    }));
+    static_assert(test_expression("baz;",
+        variable_expr("baz")));
+    // clang-format on
 }  // namespace test_simple_expressions
 
 namespace test_complex_expressions {
-    constexpr auto assign_expr(std::string_view name, auto check_value) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& assign_expr = expect_holds<ctlox::v2::assign_expr>(node_ptr);
-            expect(assign_expr.name_.lexeme_ == name);
-            check_value(assign_expr.value_);
-        };
-    }
-
-    constexpr auto binary_expr(ctlox::token_type oper, auto check_left, auto check_right) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& binary_expr = expect_holds<ctlox::v2::binary_expr>(node_ptr);
-            expect(binary_expr.operator_.type_ == oper);
-            check_left(binary_expr.left_);
-            check_right(binary_expr.right_);
-        };
-    }
-
-    constexpr auto grouping_expr(auto check_expr) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& grouping_expr = expect_holds<ctlox::v2::grouping_expr>(node_ptr);
-            check_expr(grouping_expr.expr_);
-        };
-    }
-
-    constexpr auto literal_expr(const ctlox::v2::literal_t& literal) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& literal_expr = expect_holds<ctlox::v2::literal_expr>(node_ptr);
-            expect(literal_expr.value_ == literal);
-        };
-    }
-
-    constexpr auto logical_expr(ctlox::token_type oper, auto check_left, auto check_right) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& logical_expr = expect_holds<ctlox::v2::logical_expr>(node_ptr);
-            expect(logical_expr.operator_.type_ == oper);
-            check_left(logical_expr.left_);
-            check_right(logical_expr.right_);
-        };
-    }
-
-    constexpr auto unary_expr(ctlox::token_type oper, auto check_right) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& unary_expr = expect_holds<ctlox::v2::unary_expr>(node_ptr);
-            expect(unary_expr.operator_.type_ == oper);
-            check_right(unary_expr.right_);
-        };
-    }
-
-    constexpr auto variable_expr(std::string_view name) {
-        return [=](const ctlox::v2::expr_ptr& node_ptr) {
-            const auto& variable_expr = expect_holds<ctlox::v2::variable_expr>(node_ptr);
-            expect(variable_expr.name_.lexeme_ == name);
-        };
-    }
-
     // clang-format off: manually control how these tree formats are formatted
 
     // assignment binding order

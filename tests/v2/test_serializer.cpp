@@ -23,12 +23,65 @@ constexpr const T& expect_holds(const auto& ast, ctlox::v2::flat_ptr<NodeType> n
     throw std::logic_error("Node holds incorrect type");
 }
 
-constexpr auto null_expr() {
-    return [](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
-}
-
 constexpr auto null_stmt() {
     return [](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
+}
+
+constexpr auto block_stmt(auto... check_statements) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& block_stmt = expect_holds<ctlox::v2::flat_block_stmt>(ast, node_ptr);
+        const auto& statements = block_stmt.statements_;
+
+        expect(statements.size() == sizeof...(check_statements));
+
+        auto it = statements.begin();
+        (check_statements(ast, *it++), ...);
+
+        expect(it == statements.end());
+    };
+}
+
+constexpr auto expression_stmt(auto check_expression) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& expression_stmt = expect_holds<ctlox::v2::flat_expression_stmt>(ast, node_ptr);
+        check_expression(ast, expression_stmt.expression_);
+    };
+}
+
+constexpr auto if_stmt(auto check_condition, auto check_then_branch, auto check_else_branch) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& if_stmt = expect_holds<ctlox::v2::flat_if_stmt>(ast, node_ptr);
+        check_condition(ast, if_stmt.condition_);
+        check_then_branch(ast, if_stmt.then_branch_);
+        check_else_branch(ast, if_stmt.else_branch_);
+    };
+}
+
+constexpr auto print_stmt(auto check_expression) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& print_stmt = expect_holds<ctlox::v2::flat_print_stmt>(ast, node_ptr);
+        check_expression(ast, print_stmt.expression_);
+    };
+}
+
+constexpr auto var_stmt(std::string_view name, auto check_initializer) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& var_stmt = expect_holds<ctlox::v2::flat_var_stmt>(ast, node_ptr);
+        expect(var_stmt.name_.lexeme_ == name);
+        check_initializer(ast, var_stmt.initializer_);
+    };
+}
+
+constexpr auto while_stmt(auto check_condition, auto check_body) {
+    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
+        const auto& while_stmt = expect_holds<ctlox::v2::flat_while_stmt>(ast, node_ptr);
+        check_condition(ast, while_stmt.condition_);
+        check_body(ast, while_stmt.body_);
+    };
+}
+
+constexpr auto null_expr() {
+    return [](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) { expect(node_ptr == ctlox::v2::flat_nullptr); };
 }
 
 constexpr auto assign_expr(std::string_view name, auto check_value) {
@@ -83,51 +136,6 @@ constexpr auto variable_expr(std::string_view name) {
     return [=](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) {
         const auto& variable_expr = expect_holds<ctlox::v2::flat_variable_expr>(ast, node_ptr);
         expect(variable_expr.name_.lexeme_ == name);
-    };
-}
-
-constexpr auto block_stmt(auto... check_statements) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& block_stmt = expect_holds<ctlox::v2::flat_block_stmt>(ast, node_ptr);
-        const auto& statements = block_stmt.statements_;
-
-        expect(statements.size() == sizeof...(check_statements));
-
-        auto it = statements.begin();
-        (check_statements(ast, *it++), ...);
-
-        expect(it == statements.end());
-    };
-}
-
-constexpr auto expression_stmt(auto check_expression) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& expression_stmt = expect_holds<ctlox::v2::flat_expression_stmt>(ast, node_ptr);
-        check_expression(ast, expression_stmt.expression_);
-    };
-}
-
-constexpr auto if_stmt(auto check_condition, auto check_then_branch, auto check_else_branch) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& if_stmt = expect_holds<ctlox::v2::flat_if_stmt>(ast, node_ptr);
-        check_condition(ast, if_stmt.condition_);
-        check_then_branch(ast, if_stmt.then_branch_);
-        check_else_branch(ast, if_stmt.else_branch_);
-    };
-}
-
-constexpr auto print_stmt(auto check_expression) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& print_stmt = expect_holds<ctlox::v2::flat_print_stmt>(ast, node_ptr);
-        check_expression(ast, print_stmt.expression_);
-    };
-}
-
-constexpr auto var_stmt(std::string_view name, auto check_initializer) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& var_stmt = expect_holds<ctlox::v2::flat_var_stmt>(ast, node_ptr);
-        expect(var_stmt.name_.lexeme_ == name);
-        check_initializer(ast, var_stmt.initializer_);
     };
 }
 
@@ -218,7 +226,7 @@ var foo = (12 + 13) / 2;
 }
 print !foo;
 
-if (nil or foo) {
+while (nil or foo) {
     if (!foo)
         print "impossible!";
     else
@@ -261,7 +269,7 @@ if (nil or foo) {
             unary_expr(ctlox::token_type::bang,
                 variable_expr("foo")));
     constexpr auto check_3 =
-        if_stmt(
+        while_stmt(
             logical_expr(ctlox::token_type::_or,
                 literal_expr(ctlox::v2::nil),
                 variable_expr("foo")),
@@ -272,14 +280,12 @@ if (nil or foo) {
                     print_stmt(literal_expr("impossible!")),
                     print_stmt(literal_expr("all is well"))),
                 print_stmt(literal_expr("fooful"))
-            ),
-            null_stmt());
-    // clang-format on
+            ));
 
-    static_assert((check_0(ast, ctlox::v2::flat_stmt_ptr { 0 }), true));
-    static_assert((check_1(ast, ctlox::v2::flat_stmt_ptr { 1 }), true));
-    static_assert((check_2(ast, ctlox::v2::flat_stmt_ptr { 2 }), true));
-    static_assert((check_3(ast, ctlox::v2::flat_stmt_ptr { 3 }), true));
+    static_assert((check_0(ast, ast.root_block_[0]), true));
+    static_assert((check_1(ast, ast.root_block_[1]), true));
+    static_assert((check_2(ast, ast.root_block_[2]), true));
+    static_assert((check_3(ast, ast.root_block_[3]), true));
 }  // namespace test_static_serialize
 
 }  // namespace test_v2::test_serializer

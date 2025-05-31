@@ -62,6 +62,15 @@ struct basic_var_stmt {
 using var_stmt = basic_var_stmt<expr_ptr>;
 using flat_var_stmt = basic_var_stmt<flat_expr_ptr>;
 
+template <typename StmtPtr, typename ExprPtr>
+struct basic_while_stmt {
+    ExprPtr condition_;
+    StmtPtr body_;
+};
+
+using while_stmt = basic_while_stmt<stmt_ptr, expr_ptr>;
+using flat_while_stmt = basic_while_stmt<flat_stmt_ptr, flat_expr_ptr>;
+
 template <typename StmtList, typename ExprPtr>
 class basic_stmt_t {
     using StmtPtr = typename StmtList::value_type;
@@ -71,7 +80,8 @@ class basic_stmt_t {
         basic_expression_stmt<ExprPtr>,
         basic_if_stmt<StmtPtr, ExprPtr>,
         basic_print_stmt<ExprPtr>,
-        basic_var_stmt<ExprPtr>>;
+        basic_var_stmt<ExprPtr>,
+        basic_while_stmt<StmtPtr, ExprPtr>>;
 
     variant_t stmt_;
 

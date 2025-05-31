@@ -258,6 +258,18 @@ private:
         }
     }
 
+    template <const flat_while_stmt& stmt>
+    static constexpr auto generate_stmt() {
+        using condition = visit_t<stmt.condition_>;
+        using body = visit_t<stmt.body_>;
+
+        return [](program_state auto& state) static -> void {
+            while (is_truthy(condition {}(state))) {
+                body {}(state);
+            }
+        };
+    }
+
     template <const flat_assign_expr& expr>
     static constexpr auto generate_expr() {
         using right = visit_t<expr.value_>;

@@ -44,14 +44,67 @@ private:
     }
 
     constexpr stmt_ptr statement() {
+        if (match(token_type::_for))
+            return for_statement();
         if (match(token_type::_if))
             return if_statement();
         if (match(token_type::_print))
             return print_statement();
+        if (match(token_type::_while))
+            return while_statement();
         if (match(token_type::left_brace))
             return make_stmt(block_stmt { .statements_ = block() });
 
         return expression_statement();
+    }
+
+    constexpr stmt_ptr for_statement() {
+        consume(token_type::left_paren, "Expect '(' after 'for'.");
+
+        stmt_ptr initializer;
+        if (match(token_type::semicolon)) {
+        } else if (match(token_type::_var)) {
+            initializer = var_declaration();
+        } else {
+            initializer = expression_statement();
+        }
+
+        expr_ptr condition;
+        if (!check(token_type::semicolon)) {
+            condition = expression();
+        }
+        consume(token_type::semicolon, "Expect ';' after loop condition.");
+
+        expr_ptr increment;
+        if (!check(token_type::right_paren)) {
+            increment = expression();
+        }
+        consume(token_type::right_paren, "Expect ')' after for clauses.");
+
+        stmt_ptr body = statement();
+
+        if (increment) {
+            stmt_ptr increment_stmt = make_stmt(expression_stmt { .expression_ = std::move(increment) });
+
+            stmt_list block;
+            block.push_back(std::move(body));
+            block.push_back(std::move(increment_stmt));
+            body = make_stmt(block_stmt { .statements_ = std::move(block) });
+        }
+
+        if (!condition) {
+            condition = make_expr(literal_expr { .value_ = true });
+        }
+        body = make_stmt(while_stmt { .condition_ = std::move(condition), .body_ = std::move(body) });
+
+        if (initializer) {
+            stmt_list block;
+            block.push_back(std::move(initializer));
+            block.push_back(std::move(body));
+            body = make_stmt(block_stmt { .statements_ = std::move(block) });
+        }
+
+        return body;
     }
 
     constexpr stmt_ptr if_statement() {
@@ -89,6 +142,19 @@ private:
 
         consume(token_type::semicolon, "Expect ';' after variable declaration.");
         return make_stmt(var_stmt { .name_ = name, .initializer_ = std::move(initializer) });
+    }
+
+    constexpr stmt_ptr while_statement() {
+        consume(token_type::left_paren, "Expect ')' after 'while'.");
+        expr_ptr condition = expression();
+        consume(token_type::right_paren, "Expect ')' after condition.");
+        stmt_ptr body = statement();
+
+        return make_stmt(
+            while_stmt {
+                .condition_ = std::move(condition),
+                .body_ = std::move(body),
+            });
     }
 
     constexpr stmt_ptr expression_statement() {
