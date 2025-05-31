@@ -9,15 +9,13 @@ template <std::size_t N>
 struct string {
     constexpr string() = default;
 
-    constexpr string(const char (&str)[N + 1])
-    {
+    constexpr string(const char (&str)[N + 1]) {  // NOLINT(*-explicit-constructor)
         if constexpr (N != 0) {
             std::ranges::copy_n(str, N, str_.begin());
         }
     }
 
-    constexpr string(std::string_view str)
-    {
+    constexpr string(std::string_view str) {  // NOLINT(*-explicit-constructor)
         if constexpr (N != 0) {
             std::ranges::copy_n(str.begin(), N, str_.begin());
         }
@@ -33,21 +31,18 @@ struct string {
 
     constexpr char operator[](std::size_t idx) const { return str_[idx]; };
 
-    constexpr operator std::string_view() const
-    {
+    constexpr operator std::string_view() const {  // NOLINT(*-explicit-constructor)
         return std::string_view(str_.begin(), str_.end());
     }
 
     template <std::size_t first, std::size_t last>
-    constexpr string<last - first> substr() const
-    {
+    constexpr string<last - first> substr() const {
         string<last - first> other;
         std::ranges::copy(str_.begin() + first, str_.begin() + last, other.begin());
         return other;
     }
 
-    [[nodiscard]] constexpr std::size_t find_next(std::size_t start, char c) const
-    {
+    [[nodiscard]] constexpr std::size_t find_next(std::size_t start, char c) const {
         const auto iter = std::ranges::find(str_.begin() + start, str_.end(), c);
         return iter == str_.end() ? str_.size() : iter - str_.begin();
     }
@@ -57,8 +52,7 @@ struct string {
 
     template <std::size_t M>
         requires(N != M)
-    constexpr bool operator==(const string<M>&) const
-    {
+    constexpr bool operator==(const string<M>&) const {
         return false;
     }
 
@@ -70,12 +64,13 @@ string(const char (&str)[N]) -> string<N - 1>;
 
 inline namespace literals {
     template <string s>
-    constexpr auto operator""_ct() { return s; }
+    constexpr auto operator""_ct() {
+        return s;
+    }
 }  // namespace literals
 
 template <std::size_t... Ns>
-constexpr auto concat(string<Ns> const&... strings)
-{
+constexpr auto concat(string<Ns> const&... strings) {
     constexpr std::size_t N = (Ns + ...);
     string<N> out_str;
     auto out_it = out_str.begin();

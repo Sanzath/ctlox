@@ -26,7 +26,7 @@ template <std::size_t M, std::size_t N>
 struct static_ast : basic_flat_ast<std::array<flat_stmt_t, M>, std::array<flat_expr_t, N>> { };
 
 template <typename Ast>
-concept flat_ast_c = requires(const Ast& ast, flat_stmt_ptr stmt_ptr, flat_expr_ptr expr_ptr) {
+concept _flat_ast = requires(const Ast& ast, flat_stmt_ptr stmt_ptr, flat_expr_ptr expr_ptr) {
     { ast[stmt_ptr] } -> std::same_as<const flat_stmt_t&>;
     { ast[expr_ptr] } -> std::same_as<const flat_expr_t&>;
 };

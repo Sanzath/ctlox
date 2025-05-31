@@ -10,36 +10,42 @@ namespace ctlox::v2 {
 
 class environment {
 public:
-    constexpr environment(environment* enclosing = nullptr)
+    constexpr explicit environment(environment* enclosing = nullptr)
         : enclosing_(enclosing) { }
 
-    constexpr value_t get(const token_t& name) const {
-        auto it = std::ranges::find(values_, name.lexeme_, &entry_t::first);
-        if (it != values_.end()) {
-            return it->second;
-        }
+    [[nodiscard]] constexpr value_t get(const token_t& name) const {
+        // non-capturing lambda to avoid unintentionally accessing this
+        auto do_get = [](const environment* env, const token_t& name) {
+            for (; env != nullptr; env = env->enclosing_) {
+                auto it = std::ranges::find(env->values_, name.lexeme_, &entry_t::first);
+                if (it != env->values_.end()) {
+                    return it->second;
+                }
+            }
 
-        if (enclosing_)
-            return enclosing_->get(name);
+            throw runtime_error(name, "Undefined variable.");
+        };
 
-        throw runtime_error(name, "Undefined variable.");
+        return do_get(this, name);
     }
 
     constexpr void define(const token_t& name, const value_t& value) { values_.emplace_back(name.lexeme_, value); }
 
     constexpr void assign(const token_t& name, const value_t& value) {
-        auto it = std::ranges::find(values_, name.lexeme_, &entry_t::first);
-        if (it != values_.end()) {
-            it->second = value;
-            return;
-        }
+        // non-capturing lambda to avoid unintentionally accessing this
+        auto do_assign = [](environment* env, const token_t& name, const value_t& value) {
+            for (; env != nullptr; env = env->enclosing_) {
+                auto it = std::ranges::find(env->values_, name.lexeme_, &entry_t::first);
+                if (it != env->values_.end()) {
+                    it->second = value;
+                    return;
+                }
+            }
 
-        if (enclosing_) {
-            enclosing_->assign(name, value);
-            return;
-        }
+            throw runtime_error(name, "Undefined variable.");
+        };
 
-        throw runtime_error(name, "Undefined variable.");
+        do_assign(this, name, value);
     }
 
 private:

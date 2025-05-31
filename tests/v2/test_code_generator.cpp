@@ -19,7 +19,9 @@ constexpr auto generate_code_for() {
 template <ctlox::string source>
 constexpr bool test_program(std::initializer_list<ctlox::v2::value_t> expected_output) {
     auto program = generate_code_for<source>();
-    auto output = program();
+    std::vector<ctlox::v2::value_t> output;
+    auto print_fn = [&output](ctlox::v2::value_t value) { output.push_back(std::move(value)); };
+    program(print_fn);
 
     expect_equal(output.size(), expected_output.size());
     for (const auto& [value, expected_value] : std::views::zip(output, expected_output)) {

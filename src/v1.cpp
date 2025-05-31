@@ -1,3 +1,4 @@
+#ifdef CTLOX_V1
 #include <ctlox/v1.hpp>
 
 namespace ctlox_main::v1 {
@@ -21,3 +22,4 @@ static_assert(std::is_same_v<
         ctlox::v1::value_t<7.5>>>);
 
 }
+#endif

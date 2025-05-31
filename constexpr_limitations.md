@@ -44,7 +44,14 @@ the problem.
 
 ### variable template parameter `const auto&`
 
-[TODO: describe problem]
+When a variable template contains a `const auto&` non-type template parameter,
+MSVC may fail to compile when it is used in certain contexts. The error message
+claims that the template parameter was `const T* const&` and produces errors
+based on that, despite actually passing `T const&`. This suggests a compiler bug,
+reinforced by the fact that tweaking the code somewhat can produce an Internal
+Compiler Error instead.
+
+Namely, this error was encountered when implementing `ctlox::v2::static_visit_v`.
 
 ```c++
 template <const auto& v>
@@ -53,30 +60,33 @@ constexpr const auto& foo() noexcept {
 }
 
 template <const auto& v>
-constexpr const auto& foo_v = foo<v>;  // fails with MSVC
+constexpr const auto& foo_v = foo<v>();
+```
 
-// semi-workaround: separate the template parameter from the function, i.e.
+It is sometimes possible to avoid this error by separating the template parameter
+from the function call, or by not using the variable template entirely.
+
+```c++
+template <const auto& v>
+struct foo_t { static constexpr const auto& foo() noexcept {
+    return v.bar;
+} };
 
 template <const auto& v>
-struct fooer {
-    static constexpr const auto& foo() noexcept {
-        return v.bar;
-    }
-};
-
-template <const auto& v>
-constexpr const auto& foo_v = fooer<v>::foo();  // succeeds with MSVC, sometimes
-
-// just using fooer<v>::foo() directly does work though
+constexpr const auto& foo_v = foo_t<v>::foo();  // sometimes OK
 ```
 
 ### recursion in `<const T& value>` templates
 
-MSVC generates:
+In `ctlox::v2::code_generator`, when a block statement contains another block statement,
+MSVC is unable to generate code due to the recursion, and generates the following error:
+
 ```
 C:\_\Code\C++2\ctlox\include\ctlox/v2/code_generator.hpp(140): error C3779: 'ctlox::v2::code_generator<ctlox::v2::static_ast<17,15> const `bool __cdecl test_v2::test_code_generator::depth_test(void)'::`2'::ast>::generate_block': a function that returns 'auto' cannot be used before it is defined
 ```
 
-This can happen when a lox program has a block statement which contains a block statement.
+I'm unconvinced that the error is valid, since these would be two different instantiations of
+`generate_ast`, each with a distinct `flat_stmt_list` non-type template parameter.
 
-No workaround found at this point.
+It might be possible to rework the implementation to avoid the recursion. However, at this point,
+this error has caused me to switch to LLVM clang-cl entirely.
