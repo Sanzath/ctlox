@@ -55,9 +55,9 @@ The goal is to implement all of Lox in ctlox::v2. As of the time of writing, cha
 are implemented.
 
 MSVC fails to compile some of the constexpr/template patterns employed here. I've managed
-to find workarounds for some of the valid code, but
-
-Some specific constexpr/template patterns fails to compile with MSVC. 
+to find workarounds for some of the valid code, but abandoned and switch entirely to
+LLVM/MSVC after one such error would require a massive reimagining of the code to
+correct. See [constexpr_limitations](constexpr_limitations.md) for more details. 
 
 ------
 
