@@ -129,6 +129,11 @@ struct _code_generator_base {
         else
             return none;
     }
+
+    template <const literal_t& literal>
+    static constexpr value_t materialize() {
+        return value_t(std::in_place_index<literal.index() - 1>, static_visit_v<literal>);
+    }
 };
 
 template <const auto& ast>
@@ -260,11 +265,10 @@ private:
 
     template <const flat_literal_expr& expr>
     static constexpr auto generate_expr() {
-        constexpr auto literal = static_visit_v<expr.value_>;
-        static_assert(literal != none);
+        static_assert(!std::holds_alternative<none_t>(expr.value_));
 
         return [=](program_state auto&) -> value_t {
-            return value_t { std::in_place_index<expr.value_.index() - 1>, literal };
+            return materialize<expr.value_>();
         };
     }
 
