@@ -44,6 +44,8 @@ private:
     }
 
     constexpr stmt_ptr statement() {
+        if (match(token_type::_break))
+            return break_statement();
         if (match(token_type::_for))
             return for_statement();
         if (match(token_type::_if))
@@ -56,6 +58,15 @@ private:
             return make_stmt(block_stmt { .statements_ = block() });
 
         return expression_statement();
+    }
+
+    constexpr stmt_ptr break_statement() {
+        if (loop_depth_ == 0) {
+            throw parse_error(previous(), "'break' may only appear within a loop.");
+        }
+
+        consume(token_type::semicolon, "Expect ';' after 'break'.");
+        return make_stmt(break_stmt {});
     }
 
     constexpr stmt_ptr for_statement() {
@@ -81,7 +92,9 @@ private:
         }
         consume(token_type::right_paren, "Expect ')' after for clauses.");
 
+        ++loop_depth_;
         stmt_ptr body = statement();
+        --loop_depth_;
 
         if (increment) {
             stmt_ptr increment_stmt = make_stmt(expression_stmt { .expression_ = std::move(increment) });
@@ -148,7 +161,10 @@ private:
         consume(token_type::left_paren, "Expect ')' after 'while'.");
         expr_ptr condition = expression();
         consume(token_type::right_paren, "Expect ')' after condition.");
+
+        ++loop_depth_;
         stmt_ptr body = statement();
+        --loop_depth_;
 
         return make_stmt(
             while_stmt {
@@ -363,6 +379,8 @@ private:
 
     std::span<const token_t> tokens_;
     int current_ = 0;
+
+    int loop_depth_ = 0;
 };
 
 constexpr std::vector<stmt_ptr> parse(std::span<const token_t> tokens) { return parser(tokens).parse(); }

@@ -30,6 +30,10 @@ public:
         };
     }
 
+    constexpr flat_stmt_t operator()(const break_stmt& statement) {
+        return statement;
+    }
+
     constexpr flat_stmt_t operator()(const block_stmt& statement) {
         auto statements = std::span(statement.statements_);
         flat_stmt_list block = reserve_block(statements.size());

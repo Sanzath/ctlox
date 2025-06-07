@@ -37,6 +37,7 @@ enum class token_type {
 
     // Keywords
     _and,
+    _break,
     _class,
     _else,
     _false,
@@ -59,6 +60,7 @@ enum class token_type {
 constexpr token_type identify_keyword(std::string_view s) {
     constexpr auto keywords = std::to_array<std::pair<std::string_view, token_type>>({
         { "and", token_type::_and },
+        { "break", token_type::_break },
         { "class", token_type::_class },
         { "else", token_type::_else },
         { "false", token_type::_false },

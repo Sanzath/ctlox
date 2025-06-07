@@ -24,23 +24,41 @@ struct default_print_fn {
 
 static_assert(_print_fn<default_print_fn>);
 
-template <_print_fn PrintFn = default_print_fn>
+enum class signal_type {
+    _none,
+    _break,
+    _return,
+};
+
+template <_print_fn PrintFn>
 struct program_state_t {
     constexpr program_state_t(program_state_t&&) noexcept = default;
     constexpr program_state_t& operator=(program_state_t&&) noexcept = default;
     constexpr program_state_t(const program_state_t&) = delete;
     constexpr program_state_t& operator=(const program_state_t&) = delete;
 
-    constexpr explicit program_state_t(PrintFn print_fn = PrintFn {})
-        : print_fn_(std::move(print_fn)) { }
+    constexpr explicit program_state_t(PrintFn print_fn, signal_type* signal)
+        : print_fn_(std::move(print_fn))
+        , signal_(signal) { }
 
-    constexpr explicit program_state_t(program_state_t* enclosng)
-        : env_(&enclosng->env_)
-        , print_fn_(enclosng->print_fn_) { }
+    constexpr explicit program_state_t(program_state_t* enclosing)
+        : env_(&enclosing->env_)
+        , print_fn_(enclosing->print_fn_)
+        , signal_(enclosing->signal_) { }
 
     constexpr void print(const value_t& value) const { print_fn_(value); }
 
-    [[nodiscard]] constexpr program_state_t open_scope() { return program_state_t(this); }
+    [[nodiscard]] constexpr auto open_scope() { return program_state_t(this); }
+
+    constexpr void set_signal(signal_type signal) { *signal_ = signal; }
+    [[nodiscard]] constexpr bool handle_signal(signal_type signal) {
+        if (*signal_ == signal) {
+            *signal_ = signal_type::_none;
+            return true;
+        }
+
+        return false;
+    }
 
     [[nodiscard]] constexpr value_t get_var(const token_t& name) const { return env_.get(name); }
     constexpr void define_var(const token_t& name, const value_t& value) { env_.define(name, value); }
@@ -48,7 +66,8 @@ struct program_state_t {
 
 private:
     environment env_;
-    PrintFn print_fn_;
+    [[msvc::no_unique_address]] PrintFn print_fn_;
+    signal_type* signal_;
 };
 
 template <typename T>
@@ -152,7 +171,8 @@ struct code_generator : _code_generator_base {
     static constexpr auto generate() {
         using root_block = visit_t<ast.root_block_>;
         return []<typename PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
-            program_state_t state(std::move(print_fn));
+            signal_type signal = signal_type::_none;
+            program_state_t<PrintFn> state(std::move(print_fn), &signal);
 
             root_block {}(state);
         };
@@ -171,17 +191,15 @@ private:
 
             using left_block = decltype(visit<left>());
             using right_block = decltype(visit<right>());
-            return [](program_state auto& state) static -> void {
-                left_block {}(state);
-                right_block {}(state);
-            };
+            return
+                [](program_state auto& state) static -> bool { return left_block {}(state) && right_block {}(state); };
         }
 
         else {
             using index_sequence = std::make_index_sequence<stmts.size()>;
 
             return []<std::size_t... I>(std::index_sequence<I...>) {
-                return [](program_state auto& state) static -> void { (visit_t<stmts[I]> {}(state), ...); };
+                return [](program_state auto& state) static -> bool { return (visit_t<stmts[I]> {}(state) && ...); };
             }(index_sequence {});
         }
     }
@@ -202,16 +220,27 @@ private:
     template <const flat_block_stmt& stmt>
     static constexpr auto generate_stmt() {
         using block = visit_t<stmt.statements_>;
-        return [](program_state auto& state) static -> void {
+        return [](program_state auto& state) static -> bool {
             program_state auto block_state = state.open_scope();
-            block {}(block_state);
+            return block {}(block_state);
+        };
+    }
+
+    template <const flat_break_stmt& stmt>
+    static constexpr auto generate_stmt() {
+        return [](program_state auto& state) static -> bool {
+            state.set_signal(signal_type::_break);
+            return false;
         };
     }
 
     template <const flat_expression_stmt& stmt>
     static constexpr auto generate_stmt() {
         using expr = visit_t<stmt.expression_>;
-        return [](program_state auto& state) static -> void { expr {}(state); };
+        return [](program_state auto& state) static -> bool {
+            expr {}(state);
+            return true;
+        };
     }
 
     template <const flat_if_stmt& stmt>
@@ -222,19 +251,21 @@ private:
         if constexpr (stmt.else_branch_ != flat_nullptr) {
             using else_branch = visit_t<stmt.else_branch_>;
 
-            return [](program_state auto& state) static -> void {
+            return [](program_state auto& state) static -> bool {
                 if (is_truthy(condition {}(state))) {
-                    then_branch {}(state);
+                    return then_branch {}(state);
                 } else {
-                    else_branch {}(state);
+                    return else_branch {}(state);
                 }
             };
         }
 
         else {
-            return [](program_state auto& state) static -> void {
+            return [](program_state auto& state) static -> bool {
                 if (is_truthy(condition {}(state))) {
-                    then_branch {}(state);
+                    return then_branch {}(state);
+                } else {
+                    return true;
                 }
             };
         }
@@ -243,18 +274,27 @@ private:
     template <const flat_print_stmt& stmt>
     static constexpr auto generate_stmt() {
         using expr = visit_t<stmt.expression_>;
-        return [](program_state auto& state) static -> void { state.print(expr {}(state)); };
+        return [](program_state auto& state) static -> bool {
+            state.print(expr {}(state));
+            return true;
+        };
     }
 
     template <const flat_var_stmt& stmt>
     static constexpr auto generate_stmt() {
         if constexpr (stmt.initializer_ != flat_nullptr) {
             using expr = visit_t<stmt.initializer_>;
-            return [](program_state auto& state) static -> void { state.define_var(stmt.name_, expr {}(state)); };
+            return [](program_state auto& state) static -> bool {
+                state.define_var(stmt.name_, expr {}(state));
+                return true;
+            };
         }
 
         else {
-            return [](program_state auto& state) static -> void { state.define_var(stmt.name_, nil); };
+            return [](program_state auto& state) static -> bool {
+                state.define_var(stmt.name_, nil);
+                return true;
+            };
         }
     }
 
@@ -263,10 +303,18 @@ private:
         using condition = visit_t<stmt.condition_>;
         using body = visit_t<stmt.body_>;
 
-        return [](program_state auto& state) static -> void {
-            while (is_truthy(condition {}(state))) {
-                body {}(state);
+        return [](program_state auto& state) static -> bool {
+            bool continue_execution = true;
+            while (continue_execution && is_truthy(condition {}(state))) {
+                continue_execution = body {}(state);
             }
+
+            if (state.handle_signal(signal_type::_break)) {
+                continue_execution = true;
+            }
+            // if continue_execution is false for another reason, propagate
+
+            return continue_execution;
         };
     }
 

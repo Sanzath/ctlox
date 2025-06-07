@@ -27,6 +27,11 @@ struct basic_block_stmt {
 using block_stmt = basic_block_stmt<stmt_list>;
 using flat_block_stmt = basic_block_stmt<flat_stmt_list>;
 
+struct basic_break_stmt { };
+
+using break_stmt = basic_break_stmt;
+using flat_break_stmt = basic_break_stmt;
+
 template <typename ExprPtr>
 struct basic_expression_stmt {
     ExprPtr expression_;
@@ -77,6 +82,7 @@ class basic_stmt_t {
 
     using variant_t = std::variant<
         basic_block_stmt<StmtList>,
+        basic_break_stmt,
         basic_expression_stmt<ExprPtr>,
         basic_if_stmt<StmtPtr, ExprPtr>,
         basic_print_stmt<ExprPtr>,

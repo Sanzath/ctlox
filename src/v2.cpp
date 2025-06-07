@@ -27,7 +27,9 @@ var str = "";
 for (var i = 0; i < 100; i = i + 1) {
     print str;
     str = str + ".";
+    if (i > 80) { break; }
 }
+print "foo";
 // print 1 > false;  // throws a ctlox::runtime_error
 )"_lox;
 
