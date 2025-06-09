@@ -102,10 +102,6 @@ private:
     struct consume_right_paren {
         template <bool is_right_paren>
         struct impl {
-            // TODO: is there a way to error out without a hard error?
-            // With tokens, we could just intersperse the errors in the tokens.
-            // But that doesn't really work here.
-            // -- Actually, by now parsing full statements, something could be done.
             static_assert(false, "Expect ')' after expression.");
         };
 

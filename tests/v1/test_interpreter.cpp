@@ -7,8 +7,6 @@ namespace test_v1::test_interpreter {
 using namespace ctlox::common;
 using namespace ctlox::v1;
 
-// TODO: comprehensive env tests
-
 static_assert(std::is_same_v<
     env::declare<
         env::env_t<
