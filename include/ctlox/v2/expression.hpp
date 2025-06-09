@@ -6,14 +6,32 @@
 
 #include <memory>
 #include <variant>
+#include <vector>
 
 namespace ctlox::v2 {
 
 class expr_t;
 using expr_ptr = std::unique_ptr<expr_t>;
+using expr_list = std::vector<expr_ptr>;
 
 class flat_expr_t;
 using flat_expr_ptr = flat_ptr<flat_expr_t>;
+using flat_expr_list = flat_list<flat_expr_t>;
+
+template <typename Expr>
+struct expr_traits { };
+
+template <>
+struct expr_traits<expr_t> {
+    using ptr = expr_ptr;
+    using list = expr_list;
+};
+
+template <>
+struct expr_traits<flat_expr_t> {
+    using ptr = flat_expr_ptr;
+    using list = flat_expr_list;
+};
 
 template <typename ExprPtr>
 struct basic_assign_expr {
@@ -33,6 +51,16 @@ struct basic_binary_expr {
 
 using binary_expr = basic_binary_expr<expr_ptr>;
 using flat_binary_expr = basic_binary_expr<flat_expr_ptr>;
+
+template <typename ExprPtr, typename ExprList>
+struct basic_call_expr {
+    token_t paren_;
+    ExprPtr callee_;
+    ExprList arguments_;
+};
+
+using call_expr = basic_call_expr<expr_ptr, expr_list>;
+using flat_call_expr = basic_call_expr<flat_expr_ptr, flat_expr_list>;
 
 template <typename ExprPtr>
 struct basic_grouping_expr {
@@ -75,11 +103,15 @@ struct basic_variable_expr {
 using variable_expr = basic_variable_expr;
 using flat_variable_expr = basic_variable_expr;
 
-template <typename ExprPtr>
+template <typename ExprT>
 class basic_expr_t {
+    using ExprPtr = typename expr_traits<ExprT>::ptr;
+    using ExprList = typename expr_traits<ExprT>::list;
+
     using variant_t = std::variant<
         basic_assign_expr<ExprPtr>,
         basic_binary_expr<ExprPtr>,
+        basic_call_expr<ExprPtr, ExprList>,
         basic_grouping_expr<ExprPtr>,
         basic_literal_expr,
         basic_logical_expr<ExprPtr>,
@@ -122,13 +154,13 @@ public:
 
 // These types need to be defined as a classes rather than aliases so that
 // they can refer to themselves through their pointer types.
-class expr_t : public basic_expr_t<expr_ptr> {
+class expr_t : public basic_expr_t<expr_t> {
 public:
     using basic_expr_t::basic_expr_t;
     constexpr ~expr_t() noexcept = default;
 };
 
-class flat_expr_t : public basic_expr_t<flat_expr_ptr> {
+class flat_expr_t : public basic_expr_t<flat_expr_t> {
 public:
     using basic_expr_t::basic_expr_t;
     constexpr ~flat_expr_t() noexcept = default;

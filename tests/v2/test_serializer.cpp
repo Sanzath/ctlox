@@ -57,13 +57,6 @@ constexpr auto if_stmt(auto check_condition, auto check_then_branch, auto check_
     };
 }
 
-constexpr auto print_stmt(auto check_expression) {
-    return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
-        const auto& print_stmt = expect_holds<ctlox::v2::flat_print_stmt>(ast, node_ptr);
-        check_expression(ast, print_stmt.expression_);
-    };
-}
-
 constexpr auto var_stmt(std::string_view name, auto check_initializer) {
     return [=](const auto& ast, ctlox::v2::flat_stmt_ptr node_ptr) {
         const auto& var_stmt = expect_holds<ctlox::v2::flat_var_stmt>(ast, node_ptr);
@@ -98,6 +91,16 @@ constexpr auto binary_expr(ctlox::token_type oper, auto check_left, auto check_r
         expect(binary_expr.operator_.type_ == oper);
         check_left(ast, binary_expr.left_);
         check_right(ast, binary_expr.right_);
+    };
+}
+
+constexpr auto call_expr(auto check_callee, auto... check_args) {
+    return [=](const auto& ast, ctlox::v2::flat_expr_ptr node_ptr) {
+        const auto call_expr = expect_holds<ctlox::v2::flat_call_expr>(ast, node_ptr);
+        check_callee(ast, call_expr.callee_);
+
+        auto it = call_expr.arguments_.begin();
+        (check_args(ast, *it++), ...);
     };
 }
 
@@ -137,6 +140,10 @@ constexpr auto variable_expr(std::string_view name) {
         const auto& variable_expr = expect_holds<ctlox::v2::flat_variable_expr>(ast, node_ptr);
         expect(variable_expr.name_.lexeme_ == name);
     };
+}
+
+constexpr auto print_stmt(auto check_expression) {
+    return expression_stmt(call_expr(variable_expr("println"), check_expression));
 }
 
 constexpr bool test_ast(std::string_view source, auto... check_statements) {
@@ -209,7 +216,7 @@ print !foo;
     expect(ast.root_block_.last_.i == 3);
 
     expect(ast.statements_.size() == 6);
-    expect(ast.expressions_.size() == 16);
+    expect(ast.expressions_.size() == 20);
 
     return true;
 }

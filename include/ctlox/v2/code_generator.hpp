@@ -4,95 +4,23 @@
 #include <ctlox/v2/exception.hpp>
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/flat_ast.hpp>
+#include <ctlox/v2/literal.hpp>
+#include <ctlox/v2/native_function.hpp>
+#include <ctlox/v2/program_state.hpp>
 #include <ctlox/v2/statement.hpp>
 #include <ctlox/v2/static_visit.hpp>
-#include <ctlox/v2/types.hpp>
 
 #include <functional>
 #include <print>
 
 namespace ctlox::v2 {
 
-template <typename Fn>
-concept _print_fn = std::invocable<Fn, const value_t&>;
-
-struct default_print_fn {
-    static void operator()(const value_t& value) {
-        std::visit([](const auto& val) { std::print("{}\n", val); }, value);
-    }
-};
-
-static_assert(_print_fn<default_print_fn>);
-
-enum class signal_type {
-    _none,
-    _break,
-    _return,
-};
-
-template <_print_fn PrintFn>
-struct program_state_t {
-    constexpr program_state_t(program_state_t&&) noexcept = default;
-    constexpr program_state_t& operator=(program_state_t&&) noexcept = default;
-    constexpr program_state_t(const program_state_t&) = delete;
-    constexpr program_state_t& operator=(const program_state_t&) = delete;
-
-    constexpr explicit program_state_t(PrintFn print_fn, signal_type* signal)
-        : print_fn_(std::move(print_fn))
-        , signal_(signal) { }
-
-    constexpr explicit program_state_t(program_state_t* enclosing)
-        : env_(&enclosing->env_)
-        , print_fn_(enclosing->print_fn_)
-        , signal_(enclosing->signal_) { }
-
-    constexpr void print(const value_t& value) const { print_fn_(value); }
-
-    [[nodiscard]] constexpr auto open_scope() { return program_state_t(this); }
-
-    constexpr void set_signal(signal_type signal) { *signal_ = signal; }
-    [[nodiscard]] constexpr bool handle_signal(signal_type signal) {
-        if (*signal_ == signal) {
-            *signal_ = signal_type::_none;
-            return true;
-        }
-
-        return false;
-    }
-
-    [[nodiscard]] constexpr value_t get_var(const token_t& name) const { return env_.get(name); }
-    constexpr void define_var(const token_t& name, const value_t& value) { env_.define(name, value); }
-    constexpr void assign_var(const token_t& name, const value_t& value) { env_.assign(name, value); }
-
-private:
-    environment env_;
-    [[msvc::no_unique_address]] PrintFn print_fn_;
-    signal_type* signal_;
-};
-
-template <typename T>
-concept _not_void = !std::is_void_v<T>;
-
-template <typename T>
-concept _partial_program_state = requires(T& state, const token_t& var_name, const value_t& value) {
-    { state.print(value) };
-    { state.open_scope() } -> _not_void;
-    { state.get_var(var_name) } -> std::convertible_to<value_t>;
-    { state.define_var(var_name, value) };
-    { state.assign_var(var_name, value) };
-};
-
-template <typename T>
-concept program_state = _partial_program_state<T> && requires(T& state) {
-    { state.open_scope() } -> _partial_program_state;
-};
-
 struct _code_generator_base {
     static constexpr bool is_truthy(const value_t& value) {
-        if (std::holds_alternative<nil_t>(value)) {
+        if (value.holds<nil_t>()) {
             return false;
         }
-        if (const bool* b = std::get_if<bool>(&value)) {
+        if (const bool* b = value.get_if<bool>()) {
             return *b;
         }
         return true;
@@ -100,7 +28,7 @@ struct _code_generator_base {
 
     template <const token_t& oper>
     static constexpr double& check_number_operand(value_t& value) {
-        if (double* number = std::get_if<double>(&value)) {
+        if (double* number = value.get_if<double>()) {
             return *number;
         }
 
@@ -109,8 +37,8 @@ struct _code_generator_base {
 
     template <const token_t& oper>
     static constexpr std::pair<double&, double&> check_number_operands(value_t& lhs, value_t& rhs) {
-        double* lhs_number = std::get_if<double>(&lhs);
-        double* rhs_number = std::get_if<double>(&rhs);
+        double* lhs_number = lhs.get_if<double>();
+        double* rhs_number = rhs.get_if<double>();
 
         if (lhs_number && rhs_number) {
             return { *lhs_number, *rhs_number };
@@ -171,8 +99,10 @@ struct code_generator : _code_generator_base {
     static constexpr auto generate() {
         using root_block = visit_t<ast.root_block_>;
         return []<typename PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
-            signal_type signal = signal_type::_none;
-            program_state_t<PrintFn> state(std::move(print_fn), &signal);
+            environment env;
+            env.define_native<1>("println", std::move(print_fn));
+
+            program_state_t state(&env);
 
             root_block {}(state);
         };
@@ -191,17 +121,33 @@ private:
 
             using left_block = decltype(visit<left>());
             using right_block = decltype(visit<right>());
-            return
-                [](program_state auto& state) static -> bool { return left_block {}(state) && right_block {}(state); };
+            return [](const program_state_t& state) static -> bool {
+                return left_block {}(state) && right_block {}(state);
+            };
         }
 
         else {
             using index_sequence = std::make_index_sequence<stmts.size()>;
 
             return []<std::size_t... I>(std::index_sequence<I...>) {
-                return [](program_state auto& state) static -> bool { return (visit_t<stmts[I]> {}(state) && ...); };
+                return [](const program_state_t& state) static -> bool {
+                    // && guarantees left-to-right evaluation with short-circuiting.
+                    return (visit_t<stmts[I]> {}(state) && ...);
+                };
             }(index_sequence {});
         }
+    }
+
+    template <flat_expr_list exprs>
+    static constexpr auto visit() {
+        using index_sequence = std::make_index_sequence<exprs.size()>;
+
+        return []<std::size_t... I>(std::index_sequence<I...>) {
+            return [](const program_state_t& state) static -> std::array<value_t, exprs.size()> {
+                // braced list-initialization guarantees each call is sequenced before the following calls.
+                return { visit_t<exprs[I]> {}(state)... };
+            };
+        }(index_sequence {});
     }
 
     template <flat_stmt_ptr ptr>
@@ -214,22 +160,23 @@ private:
         return generate_expr<static_visit_v<ast[ptr]>>();
     }
 
-    template <auto ptr>
-    using visit_t = decltype(visit<ptr>());
+    template <auto v>
+    using visit_t = decltype(visit<v>());
 
     template <const flat_block_stmt& stmt>
     static constexpr auto generate_stmt() {
         using block = visit_t<stmt.statements_>;
-        return [](program_state auto& state) static -> bool {
-            program_state auto block_state = state.open_scope();
+        return [](const program_state_t& state) static -> bool {
+            environment env(state.env_);
+            const program_state_t block_state = state.with(&env);
             return block {}(block_state);
         };
     }
 
     template <const flat_break_stmt& stmt>
     static constexpr auto generate_stmt() {
-        return [](program_state auto& state) static -> bool {
-            state.set_signal(signal_type::_break);
+        return [](const program_state_t& state) static -> bool {
+            (*state.break_slot_)();
             return false;
         };
     }
@@ -237,7 +184,7 @@ private:
     template <const flat_expression_stmt& stmt>
     static constexpr auto generate_stmt() {
         using expr = visit_t<stmt.expression_>;
-        return [](program_state auto& state) static -> bool {
+        return [](const program_state_t& state) static -> bool {
             expr {}(state);
             return true;
         };
@@ -251,7 +198,7 @@ private:
         if constexpr (stmt.else_branch_ != flat_nullptr) {
             using else_branch = visit_t<stmt.else_branch_>;
 
-            return [](program_state auto& state) static -> bool {
+            return [](const program_state_t& state) static -> bool {
                 if (is_truthy(condition {}(state))) {
                     return then_branch {}(state);
                 } else {
@@ -261,7 +208,7 @@ private:
         }
 
         else {
-            return [](program_state auto& state) static -> bool {
+            return [](const program_state_t& state) static -> bool {
                 if (is_truthy(condition {}(state))) {
                     return then_branch {}(state);
                 } else {
@@ -271,28 +218,19 @@ private:
         }
     }
 
-    template <const flat_print_stmt& stmt>
-    static constexpr auto generate_stmt() {
-        using expr = visit_t<stmt.expression_>;
-        return [](program_state auto& state) static -> bool {
-            state.print(expr {}(state));
-            return true;
-        };
-    }
-
     template <const flat_var_stmt& stmt>
     static constexpr auto generate_stmt() {
         if constexpr (stmt.initializer_ != flat_nullptr) {
             using expr = visit_t<stmt.initializer_>;
-            return [](program_state auto& state) static -> bool {
-                state.define_var(stmt.name_, expr {}(state));
+            return [](const program_state_t& state) static -> bool {
+                state.env_->define(stmt.name_.lexeme_, expr {}(state));
                 return true;
             };
         }
 
         else {
-            return [](program_state auto& state) static -> bool {
-                state.define_var(stmt.name_, nil);
+            return [](const program_state_t& state) static -> bool {
+                state.env_->define(stmt.name_.lexeme_, nil);
                 return true;
             };
         }
@@ -303,13 +241,16 @@ private:
         using condition = visit_t<stmt.condition_>;
         using body = visit_t<stmt.body_>;
 
-        return [](program_state auto& state) static -> bool {
+        return [](const program_state_t& state) static -> bool {
+            break_slot break_slot;
+            const program_state_t loop_state = state.with(&break_slot);
+
             bool continue_execution = true;
-            while (continue_execution && is_truthy(condition {}(state))) {
-                continue_execution = body {}(state);
+            while (continue_execution && is_truthy(condition {}(loop_state))) {
+                continue_execution = body {}(loop_state);
             }
 
-            if (state.handle_signal(signal_type::_break)) {
+            if (break_slot) {
                 continue_execution = true;
             }
             // if continue_execution is false for another reason, propagate
@@ -321,9 +262,9 @@ private:
     template <const flat_assign_expr& expr>
     static constexpr auto generate_expr() {
         using right = visit_t<expr.value_>;
-        return [](program_state auto& state) static -> value_t {
+        return [](const program_state_t& state) static -> value_t {
             value_t value = right {}(state);
-            state.assign_var(expr.name_, value);
+            state.env_->assign(expr.name_, value);
             return value;
         };
     }
@@ -338,7 +279,7 @@ private:
         using value_op = decltype(value_op_for<type>());
 
         if constexpr (number_op {} != none) {
-            return [](program_state auto& state) static -> value_t {
+            return [](const program_state_t& state) static -> value_t {
                 value_t lhs = left {}(state);
                 value_t rhs = right {}(state);
                 auto [lhs_number, rhs_number] = check_number_operands<expr.operator_>(lhs, rhs);
@@ -347,7 +288,7 @@ private:
         }
 
         else if constexpr (value_op {} != none) {
-            return [](program_state auto& state) static -> value_t {
+            return [](const program_state_t& state) static -> value_t {
                 value_t lhs = left {}(state);
                 value_t rhs = right {}(state);
                 return value_op {}(lhs, rhs);
@@ -355,16 +296,15 @@ private:
         }
 
         else if constexpr (type == token_type::plus) {
-            return [](program_state auto& state) static -> value_t {
+            return [](const program_state_t& state) static -> value_t {
                 value_t lhs = left {}(state);
                 value_t rhs = right {}(state);
 
-                if (auto [left, right] = std::pair(std::get_if<std::string>(&lhs), std::get_if<std::string>(&rhs));
+                if (auto [left, right] = std::pair(lhs.get_if<std::string>(), rhs.get_if<std::string>());
                     left && right) {
                     return *left + *right;
                 }
-                if (auto [left, right] = std::pair(std::get_if<double>(&lhs), std::get_if<double>(&rhs));
-                    left && right) {
+                if (auto [left, right] = std::pair(lhs.get_if<double>(), rhs.get_if<double>()); left && right) {
                     return *left + *right;
                 }
 
@@ -377,6 +317,29 @@ private:
         }
     }
 
+    template <const flat_call_expr& expr>
+    static constexpr auto generate_expr() {
+        using callee_fn = visit_t<expr.callee_>;
+        using arguments_fn = visit_t<expr.arguments_>;
+
+        return [](const program_state_t& state) static -> value_t {
+            value_t callee = callee_fn {}(state);
+            const auto arguments = arguments_fn {}(state);
+
+            function* fn = callee.get_if<function>();
+
+            if (!fn) {
+                throw runtime_error(expr.paren_, "Can only call functions and classes.");
+            }
+
+            if (arguments.size() != fn->arity()) {
+                throw runtime_error(expr.paren_, "Incorrect argument count.");
+            }
+
+            return (*fn)(state, std::span(arguments));
+        };
+    }
+
     template <const flat_grouping_expr& expr>
     static constexpr auto generate_expr() {
         return visit<expr.expr_>();
@@ -386,7 +349,7 @@ private:
     static constexpr auto generate_expr() {
         static_assert(!std::holds_alternative<none_t>(expr.value_));
 
-        return [](program_state auto&) static -> value_t { return materialize<expr.value_>(); };
+        return [](const program_state_t&) static -> value_t { return materialize<expr.value_>(); };
     }
 
     template <const flat_logical_expr& expr>
@@ -397,7 +360,7 @@ private:
         using short_cirtuit_op = decltype(short_circuit_op_for<expr.operator_.type_>());
         static_assert(short_cirtuit_op {} != none, "Unexpected logical operator.");
 
-        return [](program_state auto& state) static -> value_t {
+        return [](const program_state_t& state) static -> value_t {
             value_t lhs = left {}(state);
 
             if (short_cirtuit_op {}(lhs))
@@ -412,7 +375,7 @@ private:
         using right = visit_t<expr.right_>;
 
         if constexpr (expr.operator_.type_ == token_type::bang) {
-            return [](program_state auto& state) static -> value_t {
+            return [](const program_state_t& state) static -> value_t {
                 value_t value = right {}(state);
                 value = !is_truthy(value);
                 return value;
@@ -420,7 +383,7 @@ private:
         }
 
         else if constexpr (expr.operator_.type_ == token_type::minus) {
-            return [](program_state auto& state) static -> value_t {
+            return [](const program_state_t& state) static -> value_t {
                 value_t value = right {}(state);
                 double& number = check_number_operand<expr.operator_>(value);
                 number = -number;
@@ -435,7 +398,7 @@ private:
 
     template <const flat_variable_expr& expr>
     static constexpr auto generate_expr() {
-        return [](program_state auto& state) static -> value_t { return state.get_var(expr.name_); };
+        return [](const program_state_t& state) static -> value_t { return state.env_->get(expr.name_); };
     }
 };
 

@@ -19,6 +19,21 @@ class flat_stmt_t;
 using flat_stmt_ptr = flat_ptr<flat_stmt_t>;
 using flat_stmt_list = flat_list<flat_stmt_t>;
 
+template <typename Stmt>
+struct stmt_traits { };
+
+template <>
+struct stmt_traits<stmt_t> {
+    using ptr = stmt_ptr;
+    using list = stmt_list;
+};
+
+template <>
+struct stmt_traits<flat_stmt_t> {
+    using ptr = flat_stmt_ptr;
+    using list = flat_stmt_list;
+};
+
 template <typename StmtList>
 struct basic_block_stmt {
     StmtList statements_;
@@ -27,7 +42,9 @@ struct basic_block_stmt {
 using block_stmt = basic_block_stmt<stmt_list>;
 using flat_block_stmt = basic_block_stmt<flat_stmt_list>;
 
-struct basic_break_stmt { };
+struct basic_break_stmt {
+    token_t keyword_;
+};
 
 using break_stmt = basic_break_stmt;
 using flat_break_stmt = basic_break_stmt;
@@ -51,14 +68,6 @@ using if_stmt = basic_if_stmt<stmt_ptr, expr_ptr>;
 using flat_if_stmt = basic_if_stmt<flat_stmt_ptr, flat_expr_ptr>;
 
 template <typename ExprPtr>
-struct basic_print_stmt {
-    ExprPtr expression_;
-};
-
-using print_stmt = basic_print_stmt<expr_ptr>;
-using flat_print_stmt = basic_print_stmt<flat_expr_ptr>;
-
-template <typename ExprPtr>
 struct basic_var_stmt {
     token_t name_;
     ExprPtr initializer_;
@@ -76,16 +85,18 @@ struct basic_while_stmt {
 using while_stmt = basic_while_stmt<stmt_ptr, expr_ptr>;
 using flat_while_stmt = basic_while_stmt<flat_stmt_ptr, flat_expr_ptr>;
 
-template <typename StmtList, typename ExprPtr>
+template <typename StmtT, typename ExprT>
 class basic_stmt_t {
-    using StmtPtr = typename StmtList::value_type;
+    using StmtPtr = typename stmt_traits<StmtT>::ptr;
+    using StmtList = typename stmt_traits<StmtT>::list;
+    using ExprPtr = typename expr_traits<ExprT>::ptr;
+    using ExprList = typename expr_traits<ExprT>::list;
 
     using variant_t = std::variant<
         basic_block_stmt<StmtList>,
         basic_break_stmt,
         basic_expression_stmt<ExprPtr>,
         basic_if_stmt<StmtPtr, ExprPtr>,
-        basic_print_stmt<ExprPtr>,
         basic_var_stmt<ExprPtr>,
         basic_while_stmt<StmtPtr, ExprPtr>>;
 
@@ -125,12 +136,12 @@ public:
 
 // These types need to be defined as a classes rather than aliases so that
 // they can refer to themselves through their pointer types.
-class stmt_t : public basic_stmt_t<stmt_list, expr_ptr> {
+class stmt_t : public basic_stmt_t<stmt_t, expr_t> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~stmt_t() noexcept = default;
 };
-class flat_stmt_t : public basic_stmt_t<flat_stmt_list, flat_expr_ptr> {
+class flat_stmt_t : public basic_stmt_t<flat_stmt_t, flat_expr_t> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~flat_stmt_t() noexcept = default;

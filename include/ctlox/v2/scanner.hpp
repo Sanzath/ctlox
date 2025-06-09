@@ -100,10 +100,7 @@ private:
             } else if (is_alpha(c)) {
                 identifier();
             } else {
-                // TODO: how to do error reporting?
-                //       Canonical Lox reports to a global and continues.
-                //       Just throwing here means only one scan error
-                //       will be reported...
+                // TODO: allow for multiple errors
                 throw scan_error(line_, "Invalid character");
             }
             break;

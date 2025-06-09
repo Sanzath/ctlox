@@ -65,8 +65,10 @@ private:
             throw parse_error(previous(), "'break' may only appear within a loop.");
         }
 
+        const auto& keyword = previous();
+
         consume(token_type::semicolon, "Expect ';' after 'break'.");
-        return make_stmt(break_stmt {});
+        return make_stmt(break_stmt { .keyword_ = keyword });
     }
 
     constexpr stmt_ptr for_statement() {
@@ -140,9 +142,29 @@ private:
     }
 
     constexpr stmt_ptr print_statement() {
+        const token_t& keyword = previous();
         expr_ptr expr = expression();
-        consume(token_type::semicolon, "Expect ',' after value.");
-        return make_stmt(print_stmt { .expression_ = std::move(expr) });
+        consume(token_type::semicolon, "Expect ';' after value.");
+
+        const token_t synthetic_callee_name {
+            .type_ = token_type::identifier,
+            .lexeme_ = "println",
+            .literal_ = none,
+            .line_ = keyword.line_,
+        };
+        expr_ptr callee = make_expr(variable_expr { .name_ = synthetic_callee_name });
+
+        expr_list arguments;
+        arguments.push_back(std::move(expr));
+
+        expr_ptr call = make_expr(
+            call_expr {
+                .paren_ = keyword,
+                .callee_ = std::move(callee),
+                .arguments_ = std::move(arguments),
+            });
+
+        return make_stmt(expression_stmt { .expression_ = std::move(call) });
     }
 
     constexpr stmt_ptr var_declaration() {
@@ -325,7 +347,43 @@ private:
 
             expr = make_expr(unary_expr { .operator_ = oper, .right_ = std::move(right) });
         } else {
-            expr = primary();
+            expr = call();
+        }
+
+        return expr;
+    }
+
+    constexpr expr_ptr finish_call(expr_ptr callee) {
+        expr_list arguments;
+        if (!check(token_type::right_paren)) {
+            do {
+                if (arguments.size() >= 255) {
+                    throw parse_error(peek(), "Can't have more than 255 arguments.");
+                }
+
+                arguments.push_back(expression());
+            } while (match(token_type::comma));
+        }
+
+        token_t paren = consume(token_type::right_paren, "Expect ')' after arguments.");
+
+        return make_expr(
+            call_expr {
+                .paren_ = paren,
+                .callee_ = std::move(callee),
+                .arguments_ = std::move(arguments),
+            });
+    }
+
+    constexpr expr_ptr call() {
+        expr_ptr expr = primary();
+
+        while (true) {
+            if (match(token_type::left_paren)) {
+                expr = finish_call(std::move(expr));
+            } else {
+                break;
+            }
         }
 
         return expr;

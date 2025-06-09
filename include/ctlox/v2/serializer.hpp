@@ -17,7 +17,7 @@ public:
         : input_(input) { }
 
     constexpr flat_ast serialize() && {
-        flat_stmt_list root_block = reserve_block(input_.size());
+        flat_stmt_list root_block = reserve_stmt_list(input_.size());
 
         for (auto [ptr, statement] : std::views::zip(root_block, input_)) {
             put_stmt(ptr, statement->visit(*this));
@@ -30,13 +30,11 @@ public:
         };
     }
 
-    constexpr flat_stmt_t operator()(const break_stmt& statement) {
-        return statement;
-    }
+    constexpr flat_stmt_t operator()(const break_stmt& statement) { return statement; }
 
     constexpr flat_stmt_t operator()(const block_stmt& statement) {
         auto statements = std::span(statement.statements_);
-        flat_stmt_list block = reserve_block(statements.size());
+        flat_stmt_list block = reserve_stmt_list(statements.size());
 
         for (auto [ptr, statement] : std::views::zip(block, statements)) {
             put_stmt(ptr, statement->visit(*this));
@@ -71,13 +69,6 @@ public:
             .then_branch_ = then_branch,
             .else_branch_ = else_branch,
         };
-    }
-
-    constexpr flat_stmt_t operator()(const print_stmt& statement) {
-        flat_expr_ptr ptr = reserve_expr();
-        put_expr(ptr, statement.expression_->visit(*this));
-
-        return flat_print_stmt { .expression_ = ptr };
     }
 
     constexpr flat_stmt_t operator()(const var_stmt& statement) {
@@ -118,6 +109,22 @@ public:
             .operator_ = expression.operator_,
             .left_ = left,
             .right_ = right,
+        };
+    }
+
+    constexpr flat_expr_t operator()(const call_expr& expression) {
+        flat_expr_ptr callee = reserve_expr();
+        flat_expr_list arguments = reserve_expr_list(expression.arguments_.size());
+
+        put_expr(callee, expression.callee_->visit(*this));
+        for (auto [ptr, argument] : std::views::zip(arguments, expression.arguments_)) {
+            put_expr(ptr, argument->visit(*this));
+        }
+
+        return flat_call_expr {
+            .paren_ = expression.paren_,
+            .callee_ = callee,
+            .arguments_ = arguments,
         };
     }
 
@@ -164,15 +171,15 @@ public:
     }
 
 private:
-    constexpr flat_stmt_list reserve_block(std::size_t count) {
-        flat_stmt_list block {
+    constexpr flat_stmt_list reserve_stmt_list(std::size_t count) {
+        flat_stmt_list stmt_list {
             .first_ { statements_.size() },
             .last_ { statements_.size() + count },
         };
 
         statements_.resize(statements_.size() + count);
 
-        return block;
+        return stmt_list;
     }
 
     constexpr flat_stmt_ptr reserve_stmt() {
@@ -184,6 +191,17 @@ private:
     }
 
     constexpr void put_stmt(flat_stmt_ptr ptr, flat_stmt_t&& stmt) { statements_[ptr.i] = std::move(stmt); }
+
+    constexpr flat_expr_list reserve_expr_list(std::size_t count) {
+        flat_expr_list expr_list {
+            .first_ = { expressions_.size() },
+            .last_ = { expressions_.size() + count },
+        };
+
+        expressions_.resize(expressions_.size() + count);
+
+        return expr_list;
+    }
 
     constexpr flat_expr_ptr reserve_expr() {
         flat_expr_ptr ptr(expressions_.size());

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctlox/common/token_type.hpp>
-#include <ctlox/v2/types.hpp>
+#include <ctlox/v2/literal.hpp>
 
 #include <string_view>
 

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "native_function.hpp"
+
 #include <ctlox/v2/exception.hpp>
-#include <ctlox/v2/types.hpp>
+#include <ctlox/v2/value.hpp>
 
 #include <utility>
 #include <vector>
@@ -29,7 +31,7 @@ public:
         return do_get(this, name);
     }
 
-    constexpr void define(const token_t& name, const value_t& value) { values_.emplace_back(name.lexeme_, value); }
+    constexpr void define(std::string_view name, const value_t& value) { values_.emplace_back(name, value); }
 
     constexpr void assign(const token_t& name, const value_t& value) {
         // non-capturing lambda to avoid unintentionally accessing this
@@ -46,6 +48,13 @@ public:
         };
 
         do_assign(this, name, value);
+    }
+
+    template <int arity>
+    constexpr void define_native(std::string_view name, auto&& fn) {
+        using Fn = decltype(fn);
+        using NativeFn = native_function<arity, std::decay_t<Fn>>;
+        values_.emplace_back(name, function(NativeFn(name, std::forward<Fn>(fn))));
     }
 
 private:
