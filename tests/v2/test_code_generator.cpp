@@ -2,6 +2,7 @@
 
 #include <ctlox/common/string.hpp>
 #include <ctlox/v2/parser.hpp>
+#include <ctlox/v2/resolver.hpp>
 #include <ctlox/v2/scanner.hpp>
 #include <ctlox/v2/serializer.hpp>
 
@@ -13,7 +14,8 @@ template <ctlox::string source>
 constexpr auto generate_code_for() {
     constexpr auto generate_ast = [] { return ctlox::v2::parse(ctlox::v2::scan(source)); };
     static constexpr auto ast = ctlox::v2::static_serialize<generate_ast>();
-    return ctlox::v2::generate_code<ast>();
+    static constexpr auto locals = ctlox::v2::static_resolve<ast>();
+    return ctlox::v2::generate_code<ast, locals>();
 }
 
 template <ctlox::string source>

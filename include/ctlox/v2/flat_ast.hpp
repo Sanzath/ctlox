@@ -29,6 +29,7 @@ template <typename Ast>
 concept _flat_ast = requires(const Ast& ast, flat_stmt_ptr stmt_ptr, flat_expr_ptr expr_ptr) {
     { ast[stmt_ptr] } -> std::same_as<const flat_stmt_t&>;
     { ast[expr_ptr] } -> std::same_as<const flat_expr_t&>;
+    { ast.root_block_ } -> std::same_as<const flat_stmt_list&>;
 };
 
 }  // namespace ctlox::v2

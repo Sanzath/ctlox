@@ -5,6 +5,7 @@
 #include <ctlox/v2/scanner.hpp>
 #include <ctlox/v2/parser.hpp>
 #include <ctlox/v2/serializer.hpp>
+#include <ctlox/v2/resolver.hpp>
 #include <ctlox/v2/code_generator.hpp>
 // clang-format on
 
@@ -14,7 +15,8 @@ template <string source>
 constexpr auto compile() {
     constexpr auto generate_ast = [] { return parse(scan(source)); };
     static constexpr auto ast = static_serialize<generate_ast>();
-    return generate_code<ast>();
+    static constexpr auto locals = static_resolve<ast>();
+    return generate_code<ast, locals>();
 }
 
 template <string source>

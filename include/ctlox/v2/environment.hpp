@@ -15,6 +15,13 @@ public:
     constexpr explicit environment(environment* enclosing = nullptr)
         : enclosing_(enclosing) { }
 
+    constexpr auto ancestor(this auto&& self, int env_depth) noexcept -> decltype(&self) {
+        auto* ancestor = &self;
+        for (int i = 0; i < env_depth; ++i)
+            ancestor = ancestor->enclosing_;
+        return ancestor;
+    }
+
     [[nodiscard]] constexpr value_t get(const token_t& name) const {
         // non-capturing lambda to avoid unintentionally accessing this
         auto do_get = [](const environment* env, const token_t& name) {
@@ -29,6 +36,10 @@ public:
         };
 
         return do_get(this, name);
+    }
+
+    [[nodiscard]] constexpr value_t get_at(int env_depth, int env_index) const {
+        return ancestor(env_depth)->values_[env_index].second;
     }
 
     constexpr void define(std::string_view name, const value_t& value) { values_.emplace_back(name, value); }
@@ -50,6 +61,10 @@ public:
         do_assign(this, name, value);
     }
 
+    constexpr void assign_at(int env_depth, int env_index, const value_t& value) {
+        ancestor(env_depth)->values_[env_index].second = value;
+    }
+
     template <int arity>
     constexpr void define_native(std::string_view name, auto&& fn) {
         using Fn = decltype(fn);
@@ -61,7 +76,7 @@ private:
     using entry_t = std::pair<std::string, value_t>;
 
     environment* enclosing_ = nullptr;
-    std::vector<std::pair<std::string, value_t>> values_;
+    std::vector<entry_t> values_;
 };
 
 }  // namespace ctlox::v2

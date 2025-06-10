@@ -7,6 +7,7 @@
 #include <ctlox/v2/literal.hpp>
 #include <ctlox/v2/native_function.hpp>
 #include <ctlox/v2/program_state.hpp>
+#include <ctlox/v2/resolver.hpp>
 #include <ctlox/v2/statement.hpp>
 #include <ctlox/v2/static_visit.hpp>
 
@@ -93,12 +94,15 @@ struct _code_generator_base {
     }
 };
 
-template <const auto& ast>
-    requires _flat_ast<decltype(ast)>
+template <const auto& ast, const auto& locals>
+    requires _flat_ast<decltype(ast)> && _locals<decltype(locals)>
 struct code_generator : _code_generator_base {
     static constexpr auto generate() {
         using root_block = visit_t<ast.root_block_>;
-        return []<typename PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
+        return []<_print_fn PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
+            // TODO: make entrypoint nicer (allow to define any native function)
+            // TODO: use if consteval {} to only define non-constexpr functions in non-constexpr contexts
+            // TODO: define clock()
             environment env;
             env.define_native<1>("println", std::move(print_fn));
 
@@ -157,7 +161,7 @@ private:
 
     template <flat_expr_ptr ptr>
     static constexpr auto visit() {
-        return generate_expr<static_visit_v<ast[ptr]>>();
+        return generate_expr<ptr, static_visit_v<ast[ptr]>>();
     }
 
     template <auto v>
@@ -259,17 +263,29 @@ private:
         };
     }
 
-    template <const flat_assign_expr& expr>
+    template <flat_expr_ptr ptr, const flat_assign_expr& expr>
     static constexpr auto generate_expr() {
         using right = visit_t<expr.value_>;
-        return [](const program_state_t& state) static -> value_t {
-            value_t value = right {}(state);
-            state.env_->assign(expr.name_, value);
-            return value;
-        };
+        constexpr local_t local = find_local(locals, ptr);
+
+        if constexpr (local) {
+            return [](const program_state_t& state) static -> value_t {
+                value_t value = right {}(state);
+                state.env_->assign_at(local.env_depth_, local.env_index_, value);
+                return value;
+            };
+        }
+
+        else {
+            return [](const program_state_t& state) static -> value_t {
+                value_t value = right {}(state);
+                state.globals_->assign(expr.name_, value);
+                return value;
+            };
+        }
     }
 
-    template <const flat_binary_expr& expr>
+    template <flat_expr_ptr, const flat_binary_expr& expr>
     static constexpr auto generate_expr() {
         using left = visit_t<expr.left_>;
         using right = visit_t<expr.right_>;
@@ -317,7 +333,7 @@ private:
         }
     }
 
-    template <const flat_call_expr& expr>
+    template <flat_expr_ptr, const flat_call_expr& expr>
     static constexpr auto generate_expr() {
         using callee_fn = visit_t<expr.callee_>;
         using arguments_fn = visit_t<expr.arguments_>;
@@ -340,19 +356,19 @@ private:
         };
     }
 
-    template <const flat_grouping_expr& expr>
+    template <flat_expr_ptr, const flat_grouping_expr& expr>
     static constexpr auto generate_expr() {
         return visit<expr.expr_>();
     }
 
-    template <const flat_literal_expr& expr>
+    template <flat_expr_ptr, const flat_literal_expr& expr>
     static constexpr auto generate_expr() {
         static_assert(!std::holds_alternative<none_t>(expr.value_));
 
         return [](const program_state_t&) static -> value_t { return materialize<expr.value_>(); };
     }
 
-    template <const flat_logical_expr& expr>
+    template <flat_expr_ptr, const flat_logical_expr& expr>
     static constexpr auto generate_expr() {
         using left = visit_t<expr.left_>;
         using right = visit_t<expr.right_>;
@@ -370,7 +386,7 @@ private:
         };
     }
 
-    template <const flat_unary_expr& expr>
+    template <flat_expr_ptr, const flat_unary_expr& expr>
     static constexpr auto generate_expr() {
         using right = visit_t<expr.right_>;
 
@@ -396,15 +412,28 @@ private:
         }
     }
 
-    template <const flat_variable_expr& expr>
+    template <flat_expr_ptr ptr, const flat_variable_expr& expr>
     static constexpr auto generate_expr() {
-        return [](const program_state_t& state) static -> value_t { return state.env_->get(expr.name_); };
+        return lookup_variable<ptr, expr.name_>();
+    }
+
+    template <flat_expr_ptr ptr, const token_t& name>
+    static constexpr auto lookup_variable() {
+        constexpr local_t local = find_local(locals, ptr);
+
+        if constexpr (local) {
+            return [](const program_state_t& state) static -> value_t { return state.env_->get_at(local.env_depth_, local.env_index_); };
+        }
+
+        else {
+            return [](const program_state_t& state) static -> value_t { return state.globals_->get(name); };
+        }
     }
 };
 
-template <const auto& ast>
+template <const auto& ast, const auto& locals>
 constexpr auto generate_code() {
-    return code_generator<ast>::generate();
+    return code_generator<ast, locals>::generate();
 }
 
 }  // namespace ctlox::v2

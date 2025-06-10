@@ -15,6 +15,7 @@ class value_t final {
 
 public:
     template <typename... Args>
+        requires std::constructible_from<variant_t, Args&&...>
     constexpr explicit(false) value_t(Args&&... args) noexcept  // NOLINT(*-explicit-constructor)
         : value_(std::forward<Args>(args)...) { }
 

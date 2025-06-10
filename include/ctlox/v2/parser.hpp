@@ -439,6 +439,7 @@ private:
     int current_ = 0;
 
     int loop_depth_ = 0;
+    int function_depth_ = 0;
 };
 
 constexpr std::vector<stmt_ptr> parse(std::span<const token_t> tokens) { return parser(tokens).parse(); }
