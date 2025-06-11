@@ -37,6 +37,8 @@ private:
     constexpr expr_ptr expression() { return assignment(); }
 
     constexpr stmt_ptr declaration() {
+        if (match(token_type::_fun))
+            return function("function");
         if (match(token_type::_var))
             return var_declaration();
 
@@ -52,6 +54,8 @@ private:
             return if_statement();
         if (match(token_type::_print))
             return print_statement();
+        if (match(token_type::_return))
+            return return_statement();
         if (match(token_type::_while))
             return while_statement();
         if (match(token_type::left_brace))
@@ -61,14 +65,44 @@ private:
     }
 
     constexpr stmt_ptr break_statement() {
-        if (loop_depth_ == 0) {
-            throw parse_error(previous(), "'break' may only appear within a loop.");
-        }
-
         const auto& keyword = previous();
+
+        if (loop_depth_ == 0) {
+            throw parse_error(keyword, "'break' may only appear within a loop.");
+        }
 
         consume(token_type::semicolon, "Expect ';' after 'break'.");
         return make_stmt(break_stmt { .keyword_ = keyword });
+    }
+
+    constexpr stmt_ptr function(std::string_view kind) {
+        const token_t& name = consume(token_type::identifier, "Expect function/method name.");
+        consume(token_type::left_paren, "Expect '(' after function/method name.");
+        std::vector<token_t> parameters;
+        if (!check(token_type::right_paren)) {
+            do {
+                if (parameters.size() >= 255) {
+                    throw parse_error(peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.push_back(consume(token_type::identifier, "Expect parameter name."));
+            } while (match(token_type::comma));
+        }
+
+        consume(token_type::right_paren, "Expect ')' after parameters.");
+
+        consume(token_type::left_brace, "Expect '{' before function/method body.");
+
+        ++function_depth_;
+        stmt_list body = block();
+        --function_depth_;
+
+        return make_stmt(
+            function_stmt {
+                .name_ = name,
+                .params_ = std::move(parameters),
+                .body_ = std::move(body),
+            });
     }
 
     constexpr stmt_ptr for_statement() {
@@ -165,6 +199,22 @@ private:
             });
 
         return make_stmt(expression_stmt { .expression_ = std::move(call) });
+    }
+
+    constexpr stmt_ptr return_statement() {
+        const token_t& keyword = previous();
+
+        if (function_depth_ == 0) {
+            throw parse_error(keyword, "'return' may only appear within a function.");
+        }
+
+        expr_ptr value;
+        if (!check(token_type::semicolon)) {
+            value = expression();
+        }
+
+        consume(token_type::semicolon, "Expect ';' after return value.");
+        return make_stmt(return_stmt { .keyword_ = keyword, .value_ = std::move(value) });
     }
 
     constexpr stmt_ptr var_declaration() {

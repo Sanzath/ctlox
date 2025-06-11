@@ -42,7 +42,14 @@ public:
         return ancestor(env_depth)->values_[env_index].second;
     }
 
-    constexpr void define(std::string_view name, const value_t& value) { values_.emplace_back(name, value); }
+    constexpr void define(std::string_view name, const value_t& value) {
+        const auto it = std::ranges::find(values_, name, &entry_t::first);
+        if (it != values_.end()) {
+            it->second = value;
+        } else {
+            values_.emplace_back(name, value);
+        }
+    }
 
     constexpr void assign(const token_t& name, const value_t& value) {
         // non-capturing lambda to avoid unintentionally accessing this
@@ -69,7 +76,7 @@ public:
     constexpr void define_native(std::string_view name, auto&& fn) {
         using Fn = decltype(fn);
         using NativeFn = native_function<arity, std::decay_t<Fn>>;
-        values_.emplace_back(name, function(NativeFn(name, std::forward<Fn>(fn))));
+        define(name, function(NativeFn(name, std::forward<Fn>(fn))));
     }
 
 private:

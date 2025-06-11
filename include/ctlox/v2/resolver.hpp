@@ -86,21 +86,32 @@ private:
 
     constexpr void operator()(flat_stmt_ptr, const flat_expression_stmt& stmt) { resolve(stmt.expression_); }
 
-    // constexpr void operator()(const flat_function_stmt& stmt) {}
+    constexpr void operator()(flat_stmt_ptr, const flat_function_stmt& stmt) {
+        declare(stmt.name_);
+        define(stmt.name_);
+
+        resolve_function(stmt);
+    }
 
     constexpr void operator()(flat_stmt_ptr, const flat_if_stmt& stmt) {
         resolve(stmt.condition_);
         resolve(stmt.then_branch_);
-        if (stmt.else_branch_ != flat_nullptr)
+        if (stmt.else_branch_ != flat_nullptr) {
             resolve(stmt.else_branch_);
+        }
     }
 
-    // constexpr void operator()(const flat_return_stmt& stmt) {}
+    constexpr void operator()(flat_stmt_ptr, const flat_return_stmt& stmt) {
+        if (stmt.value_ != flat_nullptr) {
+            resolve(stmt.value_);
+        }
+    }
 
     constexpr void operator()(flat_stmt_ptr, const flat_var_stmt& stmt) {
         declare(stmt.name_);
-        if (stmt.initializer_ != flat_nullptr)
+        if (stmt.initializer_ != flat_nullptr) {
             resolve(stmt.initializer_);
+        }
         define(stmt.name_);
     }
 
@@ -172,6 +183,17 @@ private:
         iter->defined_ = true;
     }
 
+    constexpr void resolve_function(const flat_function_stmt& function) {
+        begin_scope();
+        for (const token_t& param : ast.range(function.params_)) {
+            declare(param);
+            define(param);
+        }
+        resolve(function.body_);
+        end_scope();
+    }
+
+    // TODO: handle/mark upvalues
     constexpr void resolve_local(flat_expr_ptr ptr, const token_t& name) {
         for (const auto& [depth, scope] : scopes_ | std::views::reverse | std::views::enumerate) {
             if (auto iter = std::ranges::find(scope, name.lexeme_, &scope_entry_t::name_); iter != scope.end()) {
@@ -185,6 +207,7 @@ private:
     struct scope_entry_t {
         std::string_view name_;
         bool defined_ = false;
+        // TODO: bool upvalue_ = false
     };
 
     using scope_t = std::vector<scope_entry_t>;

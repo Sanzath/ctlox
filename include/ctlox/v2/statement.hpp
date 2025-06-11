@@ -57,6 +57,16 @@ struct basic_expression_stmt {
 using expression_stmt = basic_expression_stmt<expr_ptr>;
 using flat_expression_stmt = basic_expression_stmt<flat_expr_ptr>;
 
+template <typename StmtList, typename TokenList>
+struct basic_function_stmt {
+    token_t name_;
+    TokenList params_;
+    StmtList body_;
+};
+
+using function_stmt = basic_function_stmt<stmt_list, token_list>;
+using flat_function_stmt = basic_function_stmt<flat_stmt_list, flat_token_list>;
+
 template <typename StmtPtr, typename ExprPtr>
 struct basic_if_stmt {
     ExprPtr condition_;
@@ -66,6 +76,15 @@ struct basic_if_stmt {
 
 using if_stmt = basic_if_stmt<stmt_ptr, expr_ptr>;
 using flat_if_stmt = basic_if_stmt<flat_stmt_ptr, flat_expr_ptr>;
+
+template <typename ExprPtr>
+struct basic_return_stmt {
+    token_t keyword_;
+    ExprPtr value_;
+};
+
+using return_stmt = basic_return_stmt<expr_ptr>;
+using flat_return_stmt = basic_return_stmt<flat_expr_ptr>;
 
 template <typename ExprPtr>
 struct basic_var_stmt {
@@ -85,7 +104,7 @@ struct basic_while_stmt {
 using while_stmt = basic_while_stmt<stmt_ptr, expr_ptr>;
 using flat_while_stmt = basic_while_stmt<flat_stmt_ptr, flat_expr_ptr>;
 
-template <typename StmtT, typename ExprT>
+template <typename StmtT, typename ExprT, typename TokenList>
 class basic_stmt_t {
     using StmtPtr = typename stmt_traits<StmtT>::ptr;
     using StmtList = typename stmt_traits<StmtT>::list;
@@ -96,7 +115,9 @@ class basic_stmt_t {
         basic_block_stmt<StmtList>,
         basic_break_stmt,
         basic_expression_stmt<ExprPtr>,
+        basic_function_stmt<StmtList, TokenList>,
         basic_if_stmt<StmtPtr, ExprPtr>,
+        basic_return_stmt<ExprPtr>,
         basic_var_stmt<ExprPtr>,
         basic_while_stmt<StmtPtr, ExprPtr>>;
 
@@ -136,12 +157,12 @@ public:
 
 // These types need to be defined as a classes rather than aliases so that
 // they can refer to themselves through their pointer types.
-class stmt_t : public basic_stmt_t<stmt_t, expr_t> {
+class stmt_t : public basic_stmt_t<stmt_t, expr_t, token_list> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~stmt_t() noexcept = default;
 };
-class flat_stmt_t : public basic_stmt_t<flat_stmt_t, flat_expr_t> {
+class flat_stmt_t : public basic_stmt_t<flat_stmt_t, flat_expr_t, flat_token_list> {
 public:
     using basic_stmt_t::basic_stmt_t;
     constexpr ~flat_stmt_t() noexcept = default;

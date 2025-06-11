@@ -2,23 +2,9 @@
 
 #include <ctlox/v2/value.hpp>
 
-#include <concepts>
-#include <print>
-
 namespace ctlox::v2 {
 
 class environment;
-
-template <typename Fn>
-concept _print_fn = std::invocable<Fn, const value_t&>;
-
-struct default_print_fn {
-    static void operator()(const value_t& value) {
-        value.visit([](const auto& val) { std::print("{}\n", val); });
-    }
-};
-
-static_assert(_print_fn<default_print_fn>);
 
 struct break_slot {
     bool active_ = false;
@@ -26,7 +12,12 @@ struct break_slot {
     constexpr explicit operator bool() const noexcept { return active_; }
 };
 
-struct return_slot { };
+struct return_slot {
+    value_t value_;
+    constexpr void operator()(value_t value) noexcept { value_ = std::move(value); }
+
+    constexpr value_t operator()() && noexcept { return std::move(value_); }
+};
 
 struct program_state_t {
     environment* globals_ = nullptr;
@@ -35,9 +26,12 @@ struct program_state_t {
     break_slot* break_slot_ = nullptr;
     return_slot* return_slot_ = nullptr;
 
-    constexpr program_state_t(environment* env)
+    std::vector<std::unique_ptr<environment>>* environments_;
+
+    constexpr program_state_t(environment* env, std::vector<std::unique_ptr<environment>>* envs)
         : globals_(env)
-        , env_(globals_) { }
+        , env_(globals_)
+        , environments_(envs) { }
 
     constexpr program_state_t with(environment* env) const {
         program_state_t substate = *this;

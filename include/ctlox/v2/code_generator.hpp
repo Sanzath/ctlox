@@ -1,11 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <ctlox/v2/environment.hpp>
 #include <ctlox/v2/exception.hpp>
 #include <ctlox/v2/expression.hpp>
 #include <ctlox/v2/flat_ast.hpp>
 #include <ctlox/v2/literal.hpp>
-#include <ctlox/v2/native_function.hpp>
+#include <ctlox/v2/lox_function.hpp>
 #include <ctlox/v2/program_state.hpp>
 #include <ctlox/v2/resolver.hpp>
 #include <ctlox/v2/statement.hpp>
@@ -15,6 +16,33 @@
 #include <print>
 
 namespace ctlox::v2 {
+
+struct default_println_fn {
+    static constexpr void operator()(const value_t& value) {
+        if !consteval {
+            value.visit([](const auto& val) { std::print("{}\n", val); });
+        }
+    }
+};
+
+struct default_clock_fn {
+    static constexpr value_t operator()() {
+        if !consteval {
+            using double_time_point_t
+                = std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>>;
+            return double_time_point_t(std::chrono::system_clock::now()).time_since_epoch().count();
+        } else {
+            return 0.0;
+        }
+    }
+};
+
+struct default_setup_fn {
+    static constexpr void operator()(environment*) { }
+};
+
+template <typename Fn>
+concept _setup_fn = std::invocable<Fn, environment*>;
 
 struct _code_generator_base {
     static constexpr bool is_truthy(const value_t& value) {
@@ -99,14 +127,17 @@ template <const auto& ast, const auto& locals>
 struct code_generator : _code_generator_base {
     static constexpr auto generate() {
         using root_block = visit_t<ast.root_block_>;
-        return []<_print_fn PrintFn = default_print_fn>(PrintFn print_fn = default_print_fn {}) {
-            // TODO: make entrypoint nicer (allow to define any native function)
-            // TODO: use if consteval {} to only define non-constexpr functions in non-constexpr contexts
-            // TODO: define clock()
+        return []<_setup_fn SetupFn = default_setup_fn>(SetupFn&& setup_fn = {}) {
             environment env;
-            env.define_native<1>("println", std::move(print_fn));
+            env.define_native<1>("println", default_println_fn {});
+            env.define_native<0>("clock", default_clock_fn {});
 
-            program_state_t state(&env);
+            std::invoke(std::forward<SetupFn>(setup_fn), &env);
+
+            // TODO: environments should only stick around as long as needed, not forever.
+            std::vector<std::unique_ptr<environment>> envs;
+
+            program_state_t state(&env, &envs);
 
             root_block {}(state);
         };
@@ -171,8 +202,10 @@ private:
     static constexpr auto generate_stmt() {
         using block = visit_t<stmt.statements_>;
         return [](const program_state_t& state) static -> bool {
-            environment env(state.env_);
-            const program_state_t block_state = state.with(&env);
+            // TODO
+            // environment env(state.env_);
+            auto& env = state.environments_->emplace_back(std::make_unique<environment>(state.env_));
+            const program_state_t block_state = state.with(env.get());
             return block {}(block_state);
         };
     }
@@ -190,6 +223,18 @@ private:
         using expr = visit_t<stmt.expression_>;
         return [](const program_state_t& state) static -> bool {
             expr {}(state);
+            return true;
+        };
+    }
+
+    template <const flat_function_stmt& stmt>
+    static constexpr auto generate_stmt() {
+        using body = visit_t<stmt.body_>;
+        constexpr std::span<const token_t> params = ast.range(stmt.params_);
+        using function_def = lox_function<stmt.name_.lexeme_, params.data(), params.size(), body>;
+
+        return [](const program_state_t& state) static -> bool {
+            state.env_->define(stmt.name_.lexeme_, function(function_def(state.env_)));
             return true;
         };
     }
@@ -218,6 +263,24 @@ private:
                 } else {
                     return true;
                 }
+            };
+        }
+    }
+
+    template <const flat_return_stmt& stmt>
+    static constexpr auto generate_stmt() {
+        if constexpr (stmt.value_ != flat_nullptr) {
+            using value = visit_t<stmt.value_>;
+            return [](const program_state_t& state) static -> bool {
+                (*state.return_slot_)(value {}(state));
+                return false;
+            };
+        }
+
+        else {
+            return [](const program_state_t& state) static -> bool {
+                (*state.return_slot_)(nil);
+                return false;
             };
         }
     }
@@ -422,7 +485,9 @@ private:
         constexpr local_t local = find_local(locals, ptr);
 
         if constexpr (local) {
-            return [](const program_state_t& state) static -> value_t { return state.env_->get_at(local.env_depth_, local.env_index_); };
+            return [](const program_state_t& state) static -> value_t {
+                return state.env_->get_at(local.env_depth_, local.env_index_);
+            };
         }
 
         else {

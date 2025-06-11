@@ -23,7 +23,8 @@ constexpr bool test_program(std::initializer_list<ctlox::v2::value_t> expected_o
     auto program = generate_code_for<source>();
     std::vector<ctlox::v2::value_t> output;
     auto print_fn = [&output](ctlox::v2::value_t value) { output.push_back(std::move(value)); };
-    program(print_fn);
+    auto setup_fn = [&print_fn](ctlox::v2::environment* env) { env->define_native<1>("println", print_fn); };
+    program(setup_fn);
 
     expect_equal(output.size(), expected_output.size());
     for (const auto& [value, expected_value] : std::views::zip(output, expected_output)) {

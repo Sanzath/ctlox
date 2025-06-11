@@ -17,8 +17,8 @@ public:
         : name_(name)
         , fn_(fn) { }
 
-    [[nodiscard]] constexpr const std::string& name() const { return name_; }
-    [[nodiscard]] constexpr int arity() const { return arity_; }
+    [[nodiscard]] constexpr const std::string& name() const noexcept { return name_; }
+    [[nodiscard]] constexpr int arity() const noexcept { return arity_; }
 
     constexpr value_t operator()(const program_state_t& state, std::span<const value_t> arguments) const {
         using index_sequence = std::make_index_sequence<arity_>;

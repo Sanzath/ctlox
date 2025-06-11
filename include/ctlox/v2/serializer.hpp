@@ -24,9 +24,10 @@ public:
         }
 
         return flat_ast {
-            std::move(statements_),
-            std::move(expressions_),
-            root_block,
+            .statements_ = std::move(statements_),
+            .expressions_ = std::move(expressions_),
+            .tokens_ = std::move(tokens_),
+            .root_block_ = root_block,
         };
     }
 
@@ -50,6 +51,20 @@ public:
         return flat_expression_stmt { .expression_ = ptr };
     }
 
+    constexpr flat_stmt_t operator()(const function_stmt& statement) {
+        flat_token_list params = put_tokens(statement.params_);
+        flat_stmt_list body = reserve_stmt_list(statement.body_.size());
+        for (auto [ptr, statement] : std::views::zip(body, statement.body_)) {
+            put_stmt(ptr, statement->visit(*this));
+        }
+
+        return flat_function_stmt {
+            .name_ = statement.name_,
+            .params_ = params,
+            .body_ = body,
+        };
+    }
+
     constexpr flat_stmt_t operator()(const if_stmt& statement) {
         flat_expr_ptr condition = reserve_expr();
         flat_stmt_ptr then_branch = reserve_stmt();
@@ -69,6 +84,16 @@ public:
             .then_branch_ = then_branch,
             .else_branch_ = else_branch,
         };
+    }
+
+    constexpr flat_stmt_t operator()(const return_stmt& statement) {
+        flat_expr_ptr value;
+        if (statement.value_) {
+            value = reserve_expr();
+            put_expr(value, statement.value_->visit(*this));
+        }
+
+        return flat_return_stmt { .keyword_ = statement.keyword_, .value_ = value };
     }
 
     constexpr flat_stmt_t operator()(const var_stmt& statement) {
@@ -213,10 +238,22 @@ private:
 
     constexpr void put_expr(flat_expr_ptr ptr, flat_expr_t&& expr) { expressions_[ptr.i] = std::move(expr); }
 
+    constexpr flat_token_list put_tokens(std::span<const token_t> tokens) {
+        flat_token_list token_list {
+            .first_ = { tokens_.size() },
+            .last_ = { tokens_.size() + tokens.size() },
+        };
+
+        tokens_.append_range(tokens);
+
+        return token_list;
+    }
+
     std::span<const stmt_ptr> input_;
 
     std::vector<flat_stmt_t> statements_;
     std::vector<flat_expr_t> expressions_;
+    std::vector<token_t> tokens_;
 };
 
 constexpr flat_ast serialize(std::span<const stmt_ptr> input) { return serializer(input).serialize(); }
@@ -228,20 +265,22 @@ concept ast_generator = requires(Gen gen) {
 
 template <ast_generator auto gen>
 constexpr auto static_serialize() {
-    constexpr std::pair<std::size_t, std::size_t> sizes = [] {
+    constexpr std::array<std::size_t, 3> sizes = [] {
         const auto ast = serialize(gen());
-        return std::pair { ast.statements_.size(), ast.expressions_.size() };
+        return std::array{ ast.statements_.size(), ast.expressions_.size(), ast.tokens_.size() };
     }();
 
-    constexpr std::size_t M = sizes.first;
-    constexpr std::size_t N = sizes.second;
+    constexpr std::size_t M = sizes[0];
+    constexpr std::size_t N = sizes[1];
+    constexpr std::size_t P = sizes[2];
 
-    return []() -> static_ast<M, N> {
+    return []() -> static_ast<M, N, P> {
         const auto flat_ast = serialize(gen());
 
-        static_ast<M, N> static_ast;
+        static_ast<M, N, P> static_ast;
         std::ranges::copy(flat_ast.statements_, static_ast.statements_.begin());
         std::ranges::copy(flat_ast.expressions_, static_ast.expressions_.begin());
+        std::ranges::copy(flat_ast.tokens_, static_ast.tokens_.begin());
         static_ast.root_block_ = flat_ast.root_block_;
 
         return static_ast;
