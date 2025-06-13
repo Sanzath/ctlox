@@ -12,48 +12,217 @@
 
 namespace ctlox::v2 {
 
-// TODO: also track amount of references to an env from closures,
-//       to know if an env can safely be released after exiting its scope.
-//       produce a vector<flat_stmt_ptr> (sorted) of scopes which are closures...
-//       or always hold on to every environment,
-//       or implement reference counting...
+// structural span, usable as template parameters/arguments.
+template <typename T>
+struct span_t {
+    const T* data_;
+    std::size_t size_;
 
-struct local_t {
-    flat_expr_ptr ptr_ = flat_nullptr;
+    constexpr span_t(std::span<const T> span)
+        : data_(span.data())
+        , size_(span.size()) { }
+
+    constexpr operator std::span<const T>() const noexcept { return std::span(data_, size_); }
+};
+
+struct var_index_t {
     int env_depth_ = -1;
     int env_index_ = -1;
 
-    constexpr std::weak_ordering operator<=>(const local_t& other) const noexcept { return ptr_.i <=> other.ptr_.i; }
-    constexpr std::weak_ordering operator<=>(flat_expr_ptr ptr) const noexcept { return ptr_.i <=> ptr.i; }
+    constexpr auto operator<=>(const var_index_t&) const noexcept = default;
 
-    constexpr explicit operator bool() const noexcept { return ptr_ != flat_nullptr; }
+    constexpr explicit operator bool() const noexcept { return env_depth_ >= 0; }
 };
 
-template <typename Locals>
-concept _locals = requires(const Locals& locals, std::size_t index) {
-    { locals[index] } -> std::convertible_to<local_t>;
+struct local_t {
+    flat_expr_ptr ptr_ = flat_nullptr;
+    var_index_t index_;
 };
 
-constexpr local_t find_local(_locals auto const& locals, flat_expr_ptr ptr) noexcept {
-    if (auto [it1, it2]
-        = std::ranges::equal_range(locals, ptr.i, std::less {}, [](const local_t& local) { return local.ptr_.i; });
-        it1 != it2) {
-        return *it1;
+struct scope_t {
+    flat_stmt_ptr ptr_ = flat_nullptr;
+    flat_list<var_index_t> upvalues_;
+};
+
+struct closure_t {
+    flat_stmt_ptr ptr_ = flat_nullptr;
+    flat_list<var_index_t> upvalues_;
+};
+
+template <typename Locals, typename Scopes, typename Closures, typename Upvalues>
+struct basic_bindings_t {
+    using bindings_tag = void;
+
+    Locals locals_;
+    Scopes scopes_;
+    Closures closures_;
+    Upvalues upvalues_;
+
+    constexpr var_index_t find_local(flat_expr_ptr ptr) const noexcept {
+        if (auto [it1, it2] = std::ranges::equal_range(locals_, ptr, {}, &local_t::ptr_); it1 != it2) {
+            return it1->index_;
+        }
+        return {};
     }
-    return local_t {};
-}
+
+    constexpr std::span<const var_index_t> find_scope_upvalues(flat_stmt_ptr ptr) const noexcept {
+        if (auto [it1, it2] = std::ranges::equal_range(scopes_, ptr, {}, &scope_t::ptr_); it1 != it2) {
+            const flat_list<var_index_t>& list = it1->upvalues_;
+            return std::span(upvalues_).subspan(list.first_.i, list.size());
+        }
+        return {};
+    }
+
+    constexpr std::span<const var_index_t> find_closure_upvalues(flat_stmt_ptr ptr) const noexcept {
+        if (auto [it1, it2] = std::ranges::equal_range(closures_, ptr, {}, &closure_t::ptr_); it1 != it2) {
+            const flat_list<var_index_t>& list = it1->upvalues_;
+            return std::span(upvalues_).subspan(list.first_.i, list.size());
+        }
+        return {};
+    }
+};
+
+template <typename B>
+concept _bindings = requires { typename std::remove_reference_t<B>::bindings_tag; };
+
+using bindings_t
+    = basic_bindings_t<std::vector<local_t>, std::vector<scope_t>, std::vector<closure_t>, std::vector<var_index_t>>;
+
+template <std::size_t L, std::size_t S, std::size_t C, std::size_t U>
+using static_bindings_t = basic_bindings_t<
+    std::array<local_t, L>,
+    std::array<scope_t, S>,
+    std::array<closure_t, C>,
+    std::array<var_index_t, U>>;
+
+class _resolver_base {
+protected:
+    struct scope_entry_t {
+        std::string_view name_;
+        bool defined_ = false;
+        bool captured_ = false;
+    };
+
+    struct context {
+        enum class type {
+            scope,
+            function,
+        };
+
+        constexpr context(flat_stmt_ptr ptr, type type)
+            : ptr_(ptr)
+            , type_(type) { }
+
+        flat_stmt_ptr ptr_ = flat_nullptr;
+        type type_;
+
+        context* enclosing_ = nullptr;
+
+        std::vector<scope_entry_t> scope_entries_;
+        std::vector<var_index_t> upvalue_entries_;
+
+        constexpr scope_entry_t* find_entry(std::string_view name) noexcept {
+            auto it = std::ranges::find(scope_entries_, name, &scope_entry_t::name_);
+            return it != std::ranges::end(scope_entries_) ? &*it : nullptr;
+        }
+
+        constexpr void declare_entry(std::string_view name) noexcept {
+            scope_entries_.emplace_back(name, false, false);
+        }
+
+        constexpr void define_entry(std::string_view name) noexcept {
+            scope_entry_t* entry = find_entry(name);
+            assert(entry != nullptr);
+            entry->defined_ = true;
+        }
+
+        // example resolve:
+        // (1.block) a, b / (2.block) x, y / (3.function) c, d / (4.block) e
+        // resolve "b" from innermost scope:
+        // - 3 scope boundaries from 4.block to 1.block
+        // - variable at index 1 of 1.block
+        // > var_index_t { env_depth_ = 3, env_index_ = 1 }
+        // function "outer" closure index:
+        // - 2 scope boundaries from 3.function to 1.block
+        // - same variable index = 1
+        // > var_index_t { env_depth_ = 2, env_index_ = 1 }
+        // function "inner" local index:
+        // - 1 scope boundary from 4 to 3, + 1 because the closure is actually
+        //   the function scope's enclosing environment, depth = 2
+        // - this is the first captured variable in 3.function, so index = 0
+        // > var_index_t { env_depth_ = 2, env_index_ = 0 }
+        constexpr var_index_t resolve_local(std::string_view name, bool capture = false) noexcept {
+            scope_entry_t* entry = find_entry(name);
+            if (entry) {
+                if (capture) {
+                    entry->captured_ = true;
+                }
+
+                int index = static_cast<int>(std::distance(scope_entries_.data(), entry));
+                return { 0, index };
+            }
+
+            if (!enclosing_) {
+                return {};
+            }
+
+            if (type_ != type::function) {
+                auto local = enclosing_->resolve_local(name, capture);
+                if (local)
+                    ++local.env_depth_;
+                return local;
+            } else {
+                auto upvalue = enclosing_->resolve_local(name, true);
+                if (upvalue) {
+                    int upvalue_index = add_upvalue(upvalue);
+                    // Closure upvalues actually live 1 step above the function's root scope.
+                    return { 1, upvalue_index };
+                }
+                return {};
+            }
+        }
+
+        constexpr int add_upvalue(var_index_t upvalue) noexcept {
+            if (auto it = std::ranges::find(upvalue_entries_, upvalue); it != upvalue_entries_.end()) {
+                return std::distance(upvalue_entries_.begin(), it);
+            } else {
+                upvalue_entries_.emplace_back(upvalue);
+                return upvalue_entries_.size() - 1;
+            }
+        }
+
+        constexpr std::vector<var_index_t> get_scope_upvalues() const noexcept {
+            std::vector<var_index_t> upvalues;
+            upvalues.reserve(scope_entries_.size());
+            for (const auto& [index, entry] : std::views::enumerate(scope_entries_)) {
+                if (entry.captured_) {
+                    upvalues.emplace_back(0, index);
+                }
+            }
+            return upvalues;
+        }
+    };
+};
 
 template <const auto& ast>
     requires _flat_ast<decltype(ast)>
-class resolver {
+class resolver : _resolver_base {
 public:
     constexpr resolver() = default;
 
-    constexpr std::vector<local_t> resolve() && {
+    constexpr bindings_t resolve() && {
         resolve(ast.root_block_);
 
-        std::ranges::sort(locals_, std::less {});
-        return std::move(locals_);
+        std::ranges::sort(locals_, {}, &local_t::ptr_);
+        std::ranges::sort(scopes_, {}, &scope_t::ptr_);
+        std::ranges::sort(closures_, {}, &closure_t::ptr_);
+
+        return bindings_t {
+            .locals_ = std::move(locals_),
+            .scopes_ = std::move(scopes_),
+            .closures_ = std::move(closures_),
+            .upvalues_ = std::move(upvalues_),
+        };
     }
 
 private:
@@ -76,21 +245,23 @@ private:
         }
     }
 
-    constexpr void operator()(flat_stmt_ptr, const flat_block_stmt& stmt) {
-        begin_scope();
+    constexpr void operator()(flat_stmt_ptr ptr, const flat_block_stmt& stmt) {
+        context ctx(ptr, context::type::scope);
+
+        begin_ctx(ctx);
         resolve(stmt.statements_);
-        end_scope();
+        end_ctx(ctx);
     }
 
     constexpr void operator()(flat_stmt_ptr, const flat_break_stmt& stmt) { }
 
     constexpr void operator()(flat_stmt_ptr, const flat_expression_stmt& stmt) { resolve(stmt.expression_); }
 
-    constexpr void operator()(flat_stmt_ptr, const flat_function_stmt& stmt) {
+    constexpr void operator()(flat_stmt_ptr ptr, const flat_function_stmt& stmt) {
         declare(stmt.name_);
         define(stmt.name_);
 
-        resolve_function(stmt);
+        resolve_function(ptr, stmt);
     }
 
     constexpr void operator()(flat_stmt_ptr, const flat_if_stmt& stmt) {
@@ -147,9 +318,8 @@ private:
     constexpr void operator()(flat_expr_ptr, const flat_unary_expr& expr) { resolve(expr.right_); }
 
     constexpr void operator()(flat_expr_ptr ptr, const flat_variable_expr& expr) {
-        if (!scopes_.empty()) {
-            auto iter = std::ranges::find(scopes_.back(), expr.name_.lexeme_, &scope_entry_t::name_);
-            if (iter != scopes_.back().end() && !iter->defined_) {
+        if (ctx_) {
+            if (scope_entry_t* entry = ctx_->find_entry(expr.name_.lexeme_); entry && !entry->defined_) {
                 throw parse_error(expr.name_, "Can't read local variable in its own initializer.");
             }
         }
@@ -157,77 +327,116 @@ private:
         resolve_local(ptr, expr.name_);
     }
 
-    constexpr void begin_scope() { scopes_.emplace_back(); }
+    constexpr void begin_ctx(context& ctx) {
+        ctx.enclosing_ = std::exchange(ctx_, &ctx);
+    }
 
-    constexpr void end_scope() { scopes_.pop_back(); }
+    constexpr void end_ctx(context& ctx) {
+        assert(ctx_ == &ctx);
+        ctx_ = std::exchange(ctx.enclosing_, nullptr);
+
+        if (ctx.type_ == context::type::function) {
+            if (!ctx.upvalue_entries_.empty()) {
+                flat_list<var_index_t> list = append_upvalues(ctx.upvalue_entries_);
+                closures_.emplace_back(ctx.ptr_, list);
+            }
+        }
+
+        auto upvalues = ctx.get_scope_upvalues();
+        if (!upvalues.empty()) {
+            flat_list<var_index_t> list = append_upvalues(upvalues);
+            scopes_.emplace_back(ctx.ptr_, list);
+        }
+    }
 
     constexpr void declare(const token_t& name) {
-        if (scopes_.empty())
+        if (!ctx_)
             return;
 
-        auto& current_scope = scopes_.back();
-        if (std::ranges::contains(current_scope, name.lexeme_, &scope_entry_t::name_)) {
+        if (ctx_->find_entry(name.lexeme_)) {
             throw parse_error(name, "Already a variable with this name in this scope.");
         }
 
-        current_scope.emplace_back(name.lexeme_, false);
+        ctx_->declare_entry(name.lexeme_);
     }
 
     constexpr void define(const token_t& name) {
-        if (scopes_.empty())
+        if (!ctx_)
             return;
 
-        auto& current_scope = scopes_.back();
-        auto iter = std::ranges::find(current_scope, name.lexeme_, &scope_entry_t::name_);
-        assert(iter != current_scope.end());
-        iter->defined_ = true;
+        ctx_->define_entry(name.lexeme_);
     }
 
-    constexpr void resolve_function(const flat_function_stmt& function) {
-        begin_scope();
+    constexpr void resolve_function(flat_stmt_ptr ptr, const flat_function_stmt& function) {
+        context ctx(ptr, context::type::function);
+        begin_ctx(ctx);
         for (const token_t& param : ast.range(function.params_)) {
             declare(param);
             define(param);
         }
         resolve(function.body_);
-        end_scope();
+        end_ctx(ctx);
     }
 
-    // TODO: handle/mark upvalues
     constexpr void resolve_local(flat_expr_ptr ptr, const token_t& name) {
-        for (const auto& [depth, scope] : scopes_ | std::views::reverse | std::views::enumerate) {
-            if (auto iter = std::ranges::find(scope, name.lexeme_, &scope_entry_t::name_); iter != scope.end()) {
-                const auto index = std::distance(scope.begin(), iter);
-                locals_.emplace_back(ptr, depth, index);
-                return;
-            }
+        if (!ctx_)
+            return;
+
+        auto var_index = ctx_->resolve_local(name.lexeme_);
+        if (var_index) {
+            locals_.emplace_back(ptr, var_index);
         }
     }
 
-    struct scope_entry_t {
-        std::string_view name_;
-        bool defined_ = false;
-        // TODO: bool upvalue_ = false
-    };
+    constexpr flat_list<var_index_t> append_upvalues(const std::vector<var_index_t>& upvalues) {
+        flat_list<var_index_t> list = {
+            .first_ = { upvalues_.size() },
+            .last_ = { upvalues_.size() + upvalues.size() },
+        };
+        upvalues_.append_range(upvalues);
+        return list;
+    }
 
-    using scope_t = std::vector<scope_entry_t>;
-
-    std::vector<scope_t> scopes_;
     std::vector<local_t> locals_;
+    std::vector<scope_t> scopes_;
+    std::vector<closure_t> closures_;
+    std::vector<var_index_t> upvalues_;
+
+    context* ctx_ = nullptr;
 };
 
 template <const auto& ast>
-constexpr std::vector<local_t> resolve() {
+constexpr bindings_t resolve() {
     return resolver<ast>().resolve();
 }
 
 template <const auto& ast>
-constexpr auto static_resolve() {
-    constexpr std::size_t N = resolve<ast>().size();
+constexpr _bindings auto static_resolve() {
+    constexpr std::array<std::size_t, 4> sizes = [] {
+        bindings_t bindings = resolve<ast>();
+        return std::array {
+            bindings.locals_.size(),
+            bindings.scopes_.size(),
+            bindings.closures_.size(),
+            bindings.upvalues_.size(),
+        };
+    }();
 
-    std::array<local_t, N> locals;
-    std::ranges::copy(resolve<ast>(), locals.begin());
-    return locals;
+    constexpr std::size_t L = sizes[0];
+    constexpr std::size_t S = sizes[1];
+    constexpr std::size_t C = sizes[2];
+    constexpr std::size_t U = sizes[3];
+
+    return [] {
+        bindings_t bindings = resolve<ast>();
+
+        static_bindings_t<L, S, C, U> static_bindings;
+        std::ranges::copy(bindings.locals_, static_bindings.locals_.begin());
+        std::ranges::copy(bindings.scopes_, static_bindings.scopes_.begin());
+        std::ranges::copy(bindings.closures_, static_bindings.closures_.begin());
+        std::ranges::copy(bindings.upvalues_, static_bindings.upvalues_.begin());
+        return static_bindings;
+    }();
 }
 
 }  // namespace ctlox::v2

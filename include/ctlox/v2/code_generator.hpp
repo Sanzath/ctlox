@@ -122,22 +122,21 @@ struct _code_generator_base {
     }
 };
 
-template <const auto& ast, const auto& locals>
-    requires _flat_ast<decltype(ast)> && _locals<decltype(locals)>
+template <const auto& ast, const auto& bindings>
+    requires _flat_ast<decltype(ast)> && _bindings<decltype(bindings)>
 struct code_generator : _code_generator_base {
     static constexpr auto generate() {
         using root_block = visit_t<ast.root_block_>;
         return []<_setup_fn SetupFn = default_setup_fn>(SetupFn&& setup_fn = {}) {
-            environment env;
-            env.define_native<1>("println", default_println_fn {});
-            env.define_native<0>("clock", default_clock_fn {});
+            heap_t heap;
+            environment globals;
 
-            std::invoke(std::forward<SetupFn>(setup_fn), &env);
+            globals.define_native<1>("println", default_println_fn {});
+            globals.define_native<0>("clock", default_clock_fn {});
 
-            // TODO: environments should only stick around as long as needed, not forever.
-            std::vector<std::unique_ptr<environment>> envs;
+            std::invoke(std::forward<SetupFn>(setup_fn), &globals);
 
-            program_state_t state(&env, &envs);
+            program_state_t state(&heap, &globals);
 
             root_block {}(state);
         };
@@ -187,7 +186,7 @@ private:
 
     template <flat_stmt_ptr ptr>
     static constexpr auto visit() {
-        return generate_stmt<static_visit_v<ast[ptr]>>();
+        return generate_stmt<ptr, static_visit_v<ast[ptr]>>();
     }
 
     template <flat_expr_ptr ptr>
@@ -198,19 +197,17 @@ private:
     template <auto v>
     using visit_t = decltype(visit<v>());
 
-    template <const flat_block_stmt& stmt>
+    template <flat_stmt_ptr ptr, const flat_block_stmt& stmt>
     static constexpr auto generate_stmt() {
         using block = visit_t<stmt.statements_>;
         return [](const program_state_t& state) static -> bool {
-            // TODO
-            // environment env(state.env_);
-            auto& env = state.environments_->emplace_back(std::make_unique<environment>(state.env_));
-            const program_state_t block_state = state.with(env.get());
+            environment env(state.env_, state.heap_, bindings.find_scope_upvalues(ptr));
+            const program_state_t block_state = state.with(&env);
             return block {}(block_state);
         };
     }
 
-    template <const flat_break_stmt& stmt>
+    template <flat_stmt_ptr, const flat_break_stmt& stmt>
     static constexpr auto generate_stmt() {
         return [](const program_state_t& state) static -> bool {
             (*state.break_slot_)();
@@ -218,7 +215,7 @@ private:
         };
     }
 
-    template <const flat_expression_stmt& stmt>
+    template <flat_stmt_ptr, const flat_expression_stmt& stmt>
     static constexpr auto generate_stmt() {
         using expr = visit_t<stmt.expression_>;
         return [](const program_state_t& state) static -> bool {
@@ -227,19 +224,24 @@ private:
         };
     }
 
-    template <const flat_function_stmt& stmt>
+    template <flat_stmt_ptr ptr, const flat_function_stmt& stmt>
     static constexpr auto generate_stmt() {
         using body = visit_t<stmt.body_>;
         constexpr std::span<const token_t> params = ast.range(stmt.params_);
-        using function_def = lox_function<stmt.name_.lexeme_, params.data(), params.size(), body>;
+        constexpr std::span<const var_index_t> closure_upvales = bindings.find_closure_upvalues(ptr);
+        constexpr std::span<const var_index_t> scope_upvalues = bindings.find_scope_upvalues(ptr);
+
+        using function_def = lox_function<stmt.name_.lexeme_, params, closure_upvales, scope_upvalues, body>;
 
         return [](const program_state_t& state) static -> bool {
-            state.env_->define(stmt.name_.lexeme_, function(function_def(state.env_)));
+            // Workaround: predefine the name in case the function captures itself.
+            state.env_->define(stmt.name_.lexeme_, nil);
+            state.env_->assign(stmt.name_, function(function_def(state.env_)));
             return true;
         };
     }
 
-    template <const flat_if_stmt& stmt>
+    template <flat_stmt_ptr, const flat_if_stmt& stmt>
     static constexpr auto generate_stmt() {
         using condition = visit_t<stmt.condition_>;
         using then_branch = visit_t<stmt.then_branch_>;
@@ -267,7 +269,7 @@ private:
         }
     }
 
-    template <const flat_return_stmt& stmt>
+    template <flat_stmt_ptr, const flat_return_stmt& stmt>
     static constexpr auto generate_stmt() {
         if constexpr (stmt.value_ != flat_nullptr) {
             using value = visit_t<stmt.value_>;
@@ -285,7 +287,7 @@ private:
         }
     }
 
-    template <const flat_var_stmt& stmt>
+    template <flat_stmt_ptr, const flat_var_stmt& stmt>
     static constexpr auto generate_stmt() {
         if constexpr (stmt.initializer_ != flat_nullptr) {
             using expr = visit_t<stmt.initializer_>;
@@ -303,7 +305,7 @@ private:
         }
     }
 
-    template <const flat_while_stmt& stmt>
+    template <flat_stmt_ptr, const flat_while_stmt& stmt>
     static constexpr auto generate_stmt() {
         using condition = visit_t<stmt.condition_>;
         using body = visit_t<stmt.body_>;
@@ -329,7 +331,7 @@ private:
     template <flat_expr_ptr ptr, const flat_assign_expr& expr>
     static constexpr auto generate_expr() {
         using right = visit_t<expr.value_>;
-        constexpr local_t local = find_local(locals, ptr);
+        constexpr var_index_t local = bindings.find_local(ptr);
 
         if constexpr (local) {
             return [](const program_state_t& state) static -> value_t {
@@ -482,7 +484,7 @@ private:
 
     template <flat_expr_ptr ptr, const token_t& name>
     static constexpr auto lookup_variable() {
-        constexpr local_t local = find_local(locals, ptr);
+        constexpr var_index_t local = bindings.find_local(ptr);
 
         if constexpr (local) {
             return [](const program_state_t& state) static -> value_t {

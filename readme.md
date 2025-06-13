@@ -25,15 +25,19 @@ print "Hello, world!";
 program();  // writes "Hello, world!\n" to stdout
 ```
 
-By default, program output is printed directly to stdout. This may be customized
-by passing in a `print_fn` callable which accepts a `ctlox::v2::value_t`, which
-will subsequently be invoked when each `print` statement is executed. This allows
-the program to be executed in a constexpr context.
+Arbitrary native functions may be defined by passing in a `setup_fn` callable
+which accepts a `ctlox::v2::environment*`. In particular, this can be used to
+override `println`, the native function used to implement `print` statement:
 
 ```c++
 constexpr int count_prints() {
     int i = 0;
-    program([&i](const ctlox::v2::value_t&) { ++i; });
+    auto println = [&i](const ctlox::v2::value_t&) { ++i; };
+    auto setup = [=](ctlox::v2::environment* env) {
+        // println takes 1 argument
+        env->define_native<1>("println", println);
+    };
+    program(setup);
     return i;
 }
 static_assert(count_prints() == 6);
@@ -46,12 +50,18 @@ where necessary to be constexpr-compatible.
 
 Following that, as described in "Advanced techniques for high performance code generation",
 the AST is serialized into a fixed-size flat tree, allowing it to be used as a non-type 
-template parameter. This flat AST is passed as such to the code generator, which traverses 
-the AST and generates a tree of embedded lambdas.
+template parameter. This flat AST is first passed to a resolver, and both the AST and the
+resolved bindings are passed to the code generator, which traverses the AST and generates
+a tree of embedded lambdas.
+
+For closures, ctlox implements upvalue semantics, and uses simple ref-counting to clean
+up memory. However, there is no garbage collection or cycle detection, so even as much as
+a local function referencing itself will cause a (lox) memory leak. No memory is actually
+leaked in the C++ program, since the "heap" is fully destroyed when the lox program exits.
 
 ### Lox (v2)
 
-The goal is to implement all of Lox in ctlox::v2. As of the time of writing, chapters 1-8
+The goal is to implement all of Lox in ctlox::v2. As of the time of writing, chapters 1-11
 are implemented.
 
 MSVC fails to compile some of the constexpr/template patterns employed here. I've managed

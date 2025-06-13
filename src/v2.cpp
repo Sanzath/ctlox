@@ -60,15 +60,61 @@ constexpr int count_prints() {
 
 constexpr auto fibonacci = R"(
 println("-----");
+{
 fun fib(n) {
     if (n > 1) return fib(n - 1) + fib(n - 2);
     return n;
 }
 
 var t0 = clock();
-println(fib(30));
+println(fib(25));
 println("lox fibonacci took:");
 println(clock() - t0);
+}
+)"_lox;
+
+constexpr auto poor_mans_list = R"(
+// poor man's list
+
+fun make_list() {
+    fun concat(l, item) {
+        fun visit(fn) {
+            if (l != nil) l(fn);
+            fn(item);
+        }
+        return visit;
+    }
+
+    fun prepend(l) {
+        fun add (item) {
+            if (item != nil) return prepend(concat(l, item));
+            else return l;
+        }
+        return add;
+    }
+
+    return prepend(nil);
+}
+
+var list = make_list()(3)(4)(10)(111)("foo")(nil);
+list(println);
+
+fun transform_list(l, fn) {
+    var out = make_list();
+    fun vis(v) {
+        out = out(fn(v));
+    }
+    l(vis);
+    out = out(nil);
+    return out;
+}
+
+fun double(v) {
+    return v + v;
+}
+var list_2 = transform_list(list, double);
+list_2(println);
+
 )"_lox;
 
 constexpr double fib_impl(double n) {
@@ -82,11 +128,12 @@ constexpr void fib_native() {
 
     std::println("-----");
     const double_time_point_t t0 = std::chrono::system_clock::now();
-    std::println("{}", fib_impl(30));
+    std::println("{}", fib_impl(25));
     std::println("native fibonacci took: {}", double_time_point_t(std::chrono::system_clock::now()) - t0);
 }
 
 int main() try {
+
     constexpr int prints = count_prints();
     std::print("program prints {} times.\n\n", prints);
 
@@ -94,6 +141,8 @@ int main() try {
 
     fibonacci();
     fib_native();
+
+    poor_mans_list();
 
     return 0;
 } catch (const ctlox::v2::runtime_error& e) {

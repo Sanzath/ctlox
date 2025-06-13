@@ -176,6 +176,10 @@ private:
     }
 
     constexpr stmt_ptr print_statement() {
+        // print is syntactic sugar for println().
+        // This allows for users to override println() and capture program output
+        // in a constexpr context.
+
         const token_t& keyword = previous();
         expr_ptr expr = expression();
         consume(token_type::semicolon, "Expect ';' after value.");

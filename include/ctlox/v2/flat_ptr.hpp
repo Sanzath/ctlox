@@ -11,6 +11,7 @@ struct flat_ptr final {
     std::size_t i = std::numeric_limits<std::size_t>::max();
 
     constexpr bool operator==(const flat_ptr& other) const noexcept = default;
+    constexpr auto operator<=>(const flat_ptr& other) const noexcept = default;
 };
 
 struct flat_nullptr_t final {

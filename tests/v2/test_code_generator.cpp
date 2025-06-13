@@ -118,4 +118,107 @@ for (var b = 1; a < 5000; b = temp + b) {
 }
 )">({ 0., 1., 1., 2., 3., 5., 8., 13., 21., 34., 55., 89., 144., 233., 377., 610., 987., 1597., 2584., 4181. }));
 
+
+static_assert(test_program<R"(
+fun outer() {
+  var x = "before";
+  fun inner() {
+    x = "assigned";
+  }
+  inner();
+  print x;
+}
+outer();
+)">({ "assigned" }));
+
+static_assert(test_program<R"(
+var a = "global";
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
+}
+)">({ "global", "global" }));
+
+static_assert(test_program<R"(
+fun outer() {
+  var x = "outside";
+  fun inner() {
+    print x;
+  }
+
+  return inner;
+}
+
+var closure = outer();
+closure();
+)">({ "outside" }));
+
+static_assert(test_program<R"(
+var globalSet;
+var globalGet;
+
+fun main() {
+  var a = "initial";
+
+  fun set() { a = "updated"; }
+  fun get() { print a; }
+
+  globalSet = set;
+  globalGet = get;
+}
+
+main();
+globalGet();
+globalSet();
+globalGet();
+)">({ "initial", "updated" }));
+
+static_assert(test_program<R"(
+var globalOne;
+var globalTwo;
+
+fun main() {
+  for (var a = 1; a <= 2; a = a + 1) {
+    fun closure() {
+      print a;
+    }
+    if (globalOne == nil) {
+      globalOne = closure;
+    } else {
+      globalTwo = closure;
+    }
+  }
+}
+
+main();
+globalOne();
+globalTwo();
+)">({ 3., 3. }));
+
+static_assert(test_program<R"(
+fun outer() {
+  var x = "value";
+  fun middle() {
+    fun inner() {
+      print x;
+    }
+
+    print "create inner closure";
+    return inner;
+  }
+
+  print "return from outer";
+  return middle;
+}
+
+var mid = outer();
+var in = mid();
+in();
+)">({ "return from outer", "create inner closure", "value" }));
+
 }  // namespace test_v2::test_code_generator

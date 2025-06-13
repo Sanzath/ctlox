@@ -14,9 +14,9 @@ namespace ctlox::v2 {
 template <string source>
 constexpr auto compile() {
     constexpr auto generate_ast = [] { return parse(scan(source)); };
-    static constexpr auto ast = static_serialize<generate_ast>();
-    static constexpr auto locals = static_resolve<ast>();
-    return generate_code<ast, locals>();
+    static constexpr _flat_ast auto ast = static_serialize<generate_ast>();
+    static constexpr _bindings auto bindings = static_resolve<ast>();
+    return generate_code<ast, bindings>();
 }
 
 template <string source>

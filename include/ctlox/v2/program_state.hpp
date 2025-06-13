@@ -20,18 +20,17 @@ struct return_slot {
 };
 
 struct program_state_t {
+    heap_t* heap_ = nullptr;
     environment* globals_ = nullptr;
 
     environment* env_ = nullptr;
     break_slot* break_slot_ = nullptr;
     return_slot* return_slot_ = nullptr;
 
-    std::vector<std::unique_ptr<environment>>* environments_;
-
-    constexpr program_state_t(environment* env, std::vector<std::unique_ptr<environment>>* envs)
-        : globals_(env)
-        , env_(globals_)
-        , environments_(envs) { }
+    constexpr program_state_t(heap_t* heap, environment* globals)
+        : globals_(globals)
+        , heap_(heap)
+        , env_(globals_) { }
 
     constexpr program_state_t with(environment* env) const {
         program_state_t substate = *this;
